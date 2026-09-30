@@ -30,6 +30,14 @@ export function parseLitematicInWorker(buffer: ArrayBuffer): Promise<Schematic> 
       worker.terminate()
       reject(new ParseFailure({ code: 'internal', message: 'The file reader crashed.', details: event.message }))
     }
+    worker.onmessageerror = () => {
+      worker.terminate()
+      reject(new ParseFailure({
+        code: 'internal',
+        message: 'The file reader could not send the result back.',
+        details: 'messageerror',
+      }))
+    }
     worker.postMessage(buffer, [buffer])
   })
 }
