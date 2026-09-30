@@ -22,8 +22,9 @@ export function saveLitematic(
   schematic: Schematic,
   now: number = Date.now(),
   encode: (s: Schematic) => Uint8Array = encodeLitematic,
+  prepare: (s: Schematic, now: number) => Schematic = prepareForWrite,
 ): { bytes: Uint8Array; saved: Schematic } {
-  const saved = prepareForWrite(schematic, now)
+  const saved = prepare(schematic, now)
   const bytes = encode(saved)
   let reread: Schematic
   try {
@@ -31,13 +32,21 @@ export function saveLitematic(
   } catch (e) {
     throw new RoundTripError([`re-read failed: ${e instanceof Error ? e.message : String(e)}`])
   }
-  const differences = diffSchematics(saved, reread)
+  // Metadata is recomputed by prepare, so it is compared against the saved
+  // model; regions are compared against the ORIGINAL schematic, so a bug in
+  // prepare (e.g. compactRegion corrupting blocks) can't pass just because
+  // the encoder and reader agree with each other.
+  const differences = [...diffMetadata(saved, reread), ...diffRegions(schematic.regions, reread.regions)]
   if (differences.length > 0) throw new RoundTripError(differences)
   return { bytes, saved }
 }
 
 /** Human-readable differences between two models; empty when equivalent. */
 export function diffSchematics(a: Schematic, b: Schematic): string[] {
+  return [...diffMetadata(a, b), ...diffRegions(a.regions, b.regions)]
+}
+
+function diffMetadata(a: Schematic, b: Schematic): string[] {
   const out: string[] = []
   const same = (label: string, x: unknown, y: unknown) => {
     if (x !== y) out.push(`${label}: ${String(x)} ≠ ${String(y)}`)
@@ -54,10 +63,15 @@ export function diffSchematics(a: Schematic, b: Schematic): string[] {
   if (!sameInts(ma.previewImage, mb.previewImage)) out.push('metadata.previewImage differs')
   sameTag(out, 'metadata extra tags', ma.extra, mb.extra)
   sameTag(out, 'root extra tags', a.extra, b.extra)
+  return out
+}
 
-  same('region count', a.regions.length, b.regions.length)
-  a.regions.forEach((ra, i) => {
-    const rb = b.regions[i]
+/** Human-readable differences between two region lists; empty when equivalent. */
+export function diffRegions(a: Region[], b: Region[]): string[] {
+  const out: string[] = []
+  if (a.length !== b.length) out.push(`region count: ${a.length} ≠ ${b.length}`)
+  a.forEach((ra, i) => {
+    const rb = b[i]
     if (rb) diffRegion(out, ra, rb)
   })
   return out
