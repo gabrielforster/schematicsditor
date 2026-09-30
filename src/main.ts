@@ -33,7 +33,7 @@ saveButton.addEventListener('click', () => {
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/octet-stream' }))
     const a = Object.assign(document.createElement('a'), { href: url, download: `${current.metadata.name || 'schematic'}.litematic` })
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   } catch (e) {
     out.textContent = String(e)
   }
