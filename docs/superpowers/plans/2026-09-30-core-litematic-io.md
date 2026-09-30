@@ -24,7 +24,7 @@
 - Block index order: `index = y*sizeX*sizeZ + z*sizeX + x`.
 - Bits per entry: `bits = max(2, ceil(log2(paletteSize)))`. Values may span two longs.
 - Block arrays: `Uint16Array` of palette indices, `Uint32Array` when the palette has more than 65,536 entries (indices above 65,535).
-- Regions are normalized on read (positive size, min-corner position) and always written that way. Round-trip equality is checked on the normalized model.
+- Regions are normalized on read (positive size, min-corner position), but the file's original Position/Size are kept as `fileBox` and written back unchanged (Litematica stores entity positions relative to the raw Position, not the normalized min corner). Regions without an original box are written normalized.
 - Minimum supported `MinecraftDataVersion`: 1519 (Minecraft 1.13). Lower or missing → reject.
 - On write: compact unused palette entries; recompute `TotalBlocks` (non-air), `TotalVolume`, `EnclosingSize`, `RegionCount`, `TimeModified`; preserve `MinecraftDataVersion`, `Version`, `SubVersion`; keep `PreviewImageData`.
 - Air = `minecraft:air`, `minecraft:cave_air`, `minecraft:void_air`. Written palettes always have `minecraft:air` at index 0.

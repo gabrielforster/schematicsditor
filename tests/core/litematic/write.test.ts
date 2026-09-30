@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NbtString } from 'deepslate/nbt'
+import { NbtCompound, NbtDouble, NbtList, NbtString } from 'deepslate/nbt'
 import { readLitematic } from '../../../src/core/litematic/read'
 import { compactRegion, encodeLitematic, prepareForWrite, recomputeMetadata } from '../../../src/core/litematic/write'
 import { blockAt, blockStateKey, parseBlockStateKey, type Region, type Schematic } from '../../../src/core/model'
@@ -89,11 +89,49 @@ describe('encodeLitematic', () => {
     }
   })
 
-  it('writes normalized positions and positive sizes', () => {
+  it("writes the file's original negative-size corner back unchanged", () => {
     const s = read({ regions: [{ position: [5, 0, 10], size: [-3, 2, -4], palette: ['minecraft:air'] }] })
     const region = readNbt(encodeLitematic(prepareForWrite(s, NOW))).getCompound('Regions').getCompound('region0')
-    expect(region.getCompound('Position').getNumber('x')).toBe(3)
-    expect(region.getCompound('Size').getNumber('z')).toBe(4)
+    const pos = region.getCompound('Position')
+    const size = region.getCompound('Size')
+    expect([pos.getNumber('x'), pos.getNumber('y'), pos.getNumber('z')]).toEqual([5, 0, 10])
+    expect([size.getNumber('x'), size.getNumber('y'), size.getNumber('z')]).toEqual([-3, 2, -4])
+  })
+
+  it('keeps entity positions valid for a negative-size region', () => {
+    const entity = new NbtCompound()
+      .set('id', new NbtString('minecraft:armor_stand'))
+      .set('Pos', new NbtList([new NbtDouble(5.5), new NbtDouble(1.0), new NbtDouble(10.5)]))
+    const s = read({
+      regions: [{
+        position: [5, 0, 10],
+        size: [-3, 2, -4],
+        palette: ['minecraft:air'],
+        extra: { Entities: new NbtList([entity]) },
+      }],
+    })
+    const before = s.regions[0]!
+    const beforePos = before.fileBox!.position
+    const beforeEntityPos = before.extra.getList('Entities', 10).getItems()[0]!.getList('Pos', 6)
+    const beforeAbsolute = beforeEntityPos.getItems().map((n, i) => n.getAsNumber() + [beforePos.x, beforePos.y, beforePos.z][i]!)
+
+    const back = roundTrip(s).regions[0]!
+    const afterPos = back.fileBox!.position
+    const afterEntityPos = back.extra.getList('Entities', 10).getItems()[0]!.getList('Pos', 6)
+    const afterAbsolute = afterEntityPos.getItems().map((n, i) => n.getAsNumber() + [afterPos.x, afterPos.y, afterPos.z][i]!)
+
+    expect(afterAbsolute).toEqual(beforeAbsolute)
+  })
+
+  it('writes the normalized form when the region has no fileBox', () => {
+    const s = read({ regions: [{ position: [3, 0, 7], size: [3, 2, 4], palette: ['minecraft:air'] }] })
+    const region = { ...s.regions[0]!, fileBox: undefined }
+    const encoded = readNbt(encodeLitematic(prepareForWrite({ ...s, regions: [region] }, NOW)))
+      .getCompound('Regions').getCompound('region0')
+    const pos = encoded.getCompound('Position')
+    const size = encoded.getCompound('Size')
+    expect([pos.getNumber('x'), pos.getNumber('y'), pos.getNumber('z')]).toEqual([3, 0, 7])
+    expect([size.getNumber('x'), size.getNumber('y'), size.getNumber('z')]).toEqual([3, 2, 4])
   })
 
   it('preserves tile entities, strays, unknown tags and the preview image', () => {

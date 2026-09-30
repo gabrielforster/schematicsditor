@@ -58,7 +58,7 @@ Boundaries:
 
 - **BlockState**: `name` + sorted properties map. Canonical key string, e.g. `minecraft:oak_stairs[facing=north,half=top]`.
 - **Region**:
-  - `name`, `position`, `size` — size normalized to positive; Litematica's negative sizes are converted by shifting position to the minimum corner. On write, regions are always emitted in this normalized form (positive size, min-corner position), which Litematica loads identically. Round-trip equality is checked on the normalized model.
+  - `name`, `position`, `size` — size normalized to positive; Litematica's negative sizes are converted by shifting position to the minimum corner. The model is normalized in memory, but the file's original Position/Size are kept (`fileBox`) and written back unchanged, because Litematica stores entity positions relative to the raw Position, not the normalized min corner. Regions without an original box (e.g. constructed in memory) are written normalized.
   - `palette: BlockState[]`
   - `blocks: Uint16Array` of palette indices (`Uint32Array` if palette > 65,535).
   - Index order matches Litematica: `index = y*sizeX*sizeZ + z*sizeX + x`.

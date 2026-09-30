@@ -48,6 +48,13 @@ describe('diffSchematics', () => {
     b.regions[0]!.tileEntities.get(4)!.set('CustomName', new NbtString('x'))
     expect(diffSchematics(a, b)).toEqual(['region "region0": tile entity at index 4 differs'])
   })
+
+  it('reports a fileBox mismatch', () => {
+    const a = read(sample())
+    const b = read(sample())
+    b.regions[0]!.fileBox = { position: { x: 1, y: 2, z: 3 }, size: { x: 2, y: 2, z: 2 } }
+    expect(diffSchematics(a, b)).toEqual(['region "region0": fileBox differs'])
+  })
 })
 
 describe('saveLitematic', () => {

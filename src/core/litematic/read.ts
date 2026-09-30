@@ -106,7 +106,17 @@ function decodeRegion(name: string, tag: NbtCompound): Region {
     else strayTileEntities.push(te)
   }
 
-  return { name, position, size, palette, blocks, tileEntities, strayTileEntities, extra: pickUnknown(tag, REGION_KEYS) }
+  return {
+    name,
+    position,
+    size,
+    fileBox: { position: rawPos, size: rawSize },
+    palette,
+    blocks,
+    tileEntities,
+    strayTileEntities,
+    extra: pickUnknown(tag, REGION_KEYS),
+  }
 }
 
 /** Litematica sizes may be negative; convert to a min corner plus positive size. */

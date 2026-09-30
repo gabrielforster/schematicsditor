@@ -71,6 +71,14 @@ describe('readLitematic', () => {
     expect(s.regions[0]!.size).toEqual({ x: 3, y: 2, z: 4 })
   })
 
+  it('keeps the raw Position/Size from the file as fileBox', () => {
+    const s = read({ regions: [{ position: [5, 0, 10], size: [-3, 2, -4], palette: ['minecraft:air'] }] })
+    expect(s.regions[0]!.fileBox).toEqual({
+      position: { x: 5, y: 0, z: 10 },
+      size: { x: -3, y: 2, z: -4 },
+    })
+  })
+
   it('indexes tile entities by block position', () => {
     const chest = tileEntity('minecraft:chest', 1, 0, 0)
     const s = read({ regions: [{ size: [2, 1, 1], palette: ['minecraft:air', 'minecraft:chest'], blocks: [0, 1], tileEntities: [chest] }] })

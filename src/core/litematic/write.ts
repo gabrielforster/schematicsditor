@@ -3,6 +3,7 @@ import type { BlockState, Metadata, Region, Schematic, Vec3 } from '../model'
 import { AIR, blockStateKey, createBlockArray, isAir, volumeOf } from '../model'
 import { wordsToLongArray, writeNbt } from '../nbt'
 import { bitsForPalette, packBits } from './bits'
+import { normalizeBox } from './read'
 
 /**
  * Drop unused palette entries, merge entries with equal keys, and put
@@ -96,14 +97,33 @@ function encodeMetadata(m: Metadata): NbtCompound {
 function encodeRegion(region: Region): NbtCompound {
   const palette = new NbtList(region.palette.map(encodeBlockState))
   const tileEntities = new NbtList([...region.tileEntities.values(), ...region.strayTileEntities])
+  const { position, size } = fileBoxFor(region)
   const tag = new NbtCompound()
-    .set('Position', encodeVec(region.position))
-    .set('Size', encodeVec(region.size))
+    .set('Position', encodeVec(position))
+    .set('Size', encodeVec(size))
     .set('BlockStatePalette', palette)
     .set('BlockStates', wordsToLongArray(packBits(region.blocks, bitsForPalette(region.palette.length))))
     .set('TileEntities', tileEntities)
   region.extra.forEach((k, v) => tag.set(k, v))
   return tag
+}
+
+/**
+ * The Position/Size to write: the file's original raw corner when it still
+ * normalizes to this region's box (so entity positions, which Litematica
+ * stores relative to the raw Position, keep pointing at the right blocks),
+ * otherwise the normalized min-corner/positive-size form.
+ */
+function fileBoxFor(region: Region): { position: Vec3; size: Vec3 } {
+  const { fileBox } = region
+  if (!fileBox) return { position: region.position, size: region.size }
+  const renormalized = normalizeBox(fileBox.position, fileBox.size)
+  const matches = vecEquals(renormalized.position, region.position) && vecEquals(renormalized.size, region.size)
+  return matches ? fileBox : { position: region.position, size: region.size }
+}
+
+function vecEquals(a: Vec3, b: Vec3): boolean {
+  return a.x === b.x && a.y === b.y && a.z === b.z
 }
 
 function encodeBlockState(state: BlockState): NbtCompound {
