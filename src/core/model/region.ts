@@ -14,6 +14,13 @@ export interface Region {
   position: Vec3
   /** Always positive on every axis. */
   size: Vec3
+  /**
+   * The Position/Size exactly as stored in the file (size may be negative);
+   * written back unchanged while the normalized box still matches.
+   * Litematica stores entity positions relative to this raw Position, not
+   * the normalized min corner, so it must survive a round trip untouched.
+   */
+  fileBox?: { position: Vec3; size: Vec3 }
   palette: BlockState[]
   /** Palette indices, `index = y*sizeX*sizeZ + z*sizeX + x`. */
   blocks: BlockArray

@@ -10,7 +10,8 @@ const spec = {
   previewImage: [1, 2],
   rootExtra: { Custom: new NbtString('root') },
   regions: [{
-    size: [2, 1, 1] as [number, number, number],
+    position: [5, 0, 10] as [number, number, number],
+    size: [-2, 1, -1] as [number, number, number],
     palette: ['minecraft:air', 'minecraft:chest[facing=east]'],
     blocks: [0, 1],
     tileEntities: [tileEntity('minecraft:chest', 1, 0, 0), tileEntity('minecraft:sign', 9, 9, 9)],

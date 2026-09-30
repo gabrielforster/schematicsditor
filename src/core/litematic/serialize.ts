@@ -11,6 +11,7 @@ export interface SerializedRegion {
   name: string
   position: Vec3
   size: Vec3
+  fileBox?: { position: Vec3; size: Vec3 }
   palette: BlockState[]
   blocks: BlockArray
   tileEntities: [number, TagJson][]
@@ -35,6 +36,7 @@ export function serializeSchematic(s: Schematic): { data: SerializedSchematic; t
       name: r.name,
       position: r.position,
       size: r.size,
+      ...(r.fileBox !== undefined ? { fileBox: r.fileBox } : {}),
       palette: r.palette,
       blocks: r.blocks,
       tileEntities: [...r.tileEntities].map(([i, te]) => [i, te.toJson()]),
@@ -58,6 +60,7 @@ export function deserializeSchematic(d: SerializedSchematic): Schematic {
     name: r.name,
     position: r.position,
     size: r.size,
+    ...(r.fileBox !== undefined ? { fileBox: r.fileBox } : {}),
     palette: r.palette,
     blocks: r.blocks,
     tileEntities: new Map(r.tileEntities.map(([i, json]) => [i, NbtCompound.fromJson(json)])),

@@ -68,6 +68,7 @@ function diffRegion(out: string[], a: Region, b: Region): void {
   if (a.name !== b.name) out.push(`${p}: name ≠ "${b.name}"`)
   sameVec(out, `${p} position`, a.position, b.position)
   sameVec(out, `${p} size`, a.size, b.size)
+  if (!sameFileBox(a.fileBox, b.fileBox)) out.push(`${p}: fileBox differs`)
   if (a.blocks.length !== b.blocks.length) {
     out.push(`${p}: block count ${a.blocks.length} ≠ ${b.blocks.length}`)
   } else {
@@ -96,6 +97,15 @@ function diffRegion(out: string[], a: Region, b: Region): void {
 
 function sameVec(out: string[], label: string, a: Vec3, b: Vec3): void {
   if (a.x !== b.x || a.y !== b.y || a.z !== b.z) out.push(`${label}: ${a.x},${a.y},${a.z} ≠ ${b.x},${b.y},${b.z}`)
+}
+
+function sameVecValue(a: Vec3, b: Vec3): boolean {
+  return a.x === b.x && a.y === b.y && a.z === b.z
+}
+
+function sameFileBox(a: Region['fileBox'], b: Region['fileBox']): boolean {
+  if (!a || !b) return a === b
+  return sameVecValue(a.position, b.position) && sameVecValue(a.size, b.size)
 }
 
 function sameInts(a: Int32Array | undefined, b: Int32Array | undefined): boolean {
