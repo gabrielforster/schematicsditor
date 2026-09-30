@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { NbtString } from 'deepslate/nbt'
 import { readLitematic } from '../../../src/core/litematic/read'
 import { diffSchematics, RoundTripError, saveLitematic } from '../../../src/core/litematic/save'
-import { encodeLitematic } from '../../../src/core/litematic/write'
+import { encodeLitematic, prepareForWrite } from '../../../src/core/litematic/write'
+import type { Schematic } from '../../../src/core/model'
 import { writeNbt } from '../../../src/core/nbt'
 import { litematicNbt, tileEntity, type LitematicSpec } from '../../helpers/litematicNbt'
 
@@ -55,6 +56,22 @@ describe('diffSchematics', () => {
     b.regions[0]!.fileBox = { position: { x: 1, y: 2, z: 3 }, size: { x: 2, y: 2, z: 2 } }
     expect(diffSchematics(a, b)).toEqual(['region "region0": fileBox differs'])
   })
+
+  it('reports a region extra tag mismatch', () => {
+    const a = read(sample())
+    const b = read(sample())
+    b.regions[0]!.extra.set('Mod', new NbtString('x'))
+    expect(diffSchematics(a, b)).toEqual(['region "region0" extra tags differ'])
+  })
+
+  it('reports a stray tile entity mismatch', () => {
+    const spec = sample()
+    spec.regions[0]!.tileEntities = [...(spec.regions[0]!.tileEntities ?? []), tileEntity('minecraft:chest', 9, 9, 9)]
+    const a = read(spec)
+    const b = read(spec)
+    b.regions[0]!.strayTileEntities[0]!.set('CustomName', new NbtString('x'))
+    expect(diffSchematics(a, b)).toEqual(['region "region0": stray tile entities differ'])
+  })
 })
 
 describe('saveLitematic', () => {
@@ -73,5 +90,19 @@ describe('saveLitematic', () => {
 
   it('throws RoundTripError when the encoded bytes cannot be read', () => {
     expect(() => saveLitematic(read(sample()), NOW, () => new Uint8Array([1, 2, 3]))).toThrow(RoundTripError)
+  })
+
+  it('throws RoundTripError when prepare corrupts a block, caught by comparison to the original model', () => {
+    const corrupt = (s: Schematic, now: number): Schematic => {
+      const prepared = prepareForWrite(s, now)
+      const regions = prepared.regions.map((r, i) => {
+        if (i !== 0) return r
+        const blocks = r.blocks.slice() as typeof r.blocks
+        blocks[0] = blocks[0] === 0 ? 1 : 0
+        return { ...r, blocks }
+      })
+      return { ...prepared, regions }
+    }
+    expect(() => saveLitematic(read(sample()), NOW, encodeLitematic, corrupt)).toThrow(RoundTripError)
   })
 })
