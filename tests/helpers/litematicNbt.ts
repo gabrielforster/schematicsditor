@@ -18,7 +18,7 @@ export interface RegionSpec {
 
 export interface LitematicSpec {
   dataVersion?: number | null
-  version?: number
+  version?: number | null
   subVersion?: number | null
   name?: string
   regions: RegionSpec[]
@@ -77,7 +77,8 @@ export function litematicNbt(spec: LitematicSpec): NbtCompound {
     .set('EnclosingSize', vec(1, 1, 1))
   if (spec.previewImage) metadata.set('PreviewImageData', new NbtIntArray(spec.previewImage))
   for (const [k, v] of Object.entries(spec.metadataExtra ?? {})) metadata.set(k, v)
-  const root = new NbtCompound().set('Version', new NbtInt(spec.version ?? 6))
+  const root = new NbtCompound()
+  if (spec.version !== null) root.set('Version', new NbtInt(spec.version ?? 6))
   if (spec.subVersion !== null) root.set('SubVersion', new NbtInt(spec.subVersion ?? 1))
   if (spec.dataVersion !== null) root.set('MinecraftDataVersion', new NbtInt(spec.dataVersion ?? 3953))
   root.set('Metadata', metadata).set('Regions', regions)
