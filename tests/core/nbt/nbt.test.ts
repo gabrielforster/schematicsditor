@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NbtCompound, NbtLongArray, NbtString } from 'deepslate/nbt'
+import { NbtCompound, NbtFile, NbtLongArray, NbtString } from 'deepslate/nbt'
 import { longArrayToWords, NbtReadError, readNbt, wordsToLongArray, writeNbt } from '../../../src/core/nbt'
 
 describe('writeNbt / readNbt', () => {
@@ -15,6 +15,20 @@ describe('writeNbt / readNbt', () => {
 
   it('wraps parse failures in NbtReadError', () => {
     expect(() => readNbt(new Uint8Array([1, 2, 3]))).toThrow(NbtReadError)
+  })
+
+  it('reads zlib-compressed NBT', () => {
+    const file = NbtFile.create({ compression: 'zlib' })
+    file.root = new NbtCompound().set('Name', new NbtString('x'))
+    const bytes = file.write()
+    expect(readNbt(bytes).getString('Name')).toBe('x')
+  })
+
+  it('reads uncompressed NBT', () => {
+    const file = NbtFile.create({ compression: 'none' })
+    file.root = new NbtCompound().set('Name', new NbtString('x'))
+    const bytes = file.write()
+    expect(readNbt(bytes).getString('Name')).toBe('x')
   })
 })
 
