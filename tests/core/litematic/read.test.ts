@@ -127,6 +127,10 @@ describe('readLitematic', () => {
     expectLitematicError(() => read({ dataVersion: null, regions: [{ size: [1, 1, 1], palette: ['minecraft:air'] }] }), 'unsupported-version')
   })
 
+  it('rejects files without a Version', () => {
+    expectLitematicError(() => read({ version: null, regions: [{ size: [1, 1, 1], palette: ['minecraft:air'] }] }), 'corrupt')
+  })
+
   it('rejects truncated block data', () => {
     const root = litematicNbt({ regions: [{ size: [4, 4, 4], palette: ['minecraft:air'] }] })
     root.getCompound('Regions').getCompound('region0').set('BlockStates', new NbtList([]))

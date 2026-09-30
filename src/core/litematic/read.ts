@@ -32,6 +32,9 @@ export function decodeLitematic(root: NbtCompound): Schematic {
   if (!root.hasCompound('Regions') || root.getCompound('Regions').size === 0) {
     throw new LitematicError('no-regions', 'This file has no Regions; it is not a Litematica schematic.')
   }
+  if (!root.hasNumber('Version')) {
+    throw new LitematicError('corrupt', 'This file has no schematic Version; it is not a valid Litematica schematic.')
+  }
   if (!root.hasNumber('MinecraftDataVersion') || root.getNumber('MinecraftDataVersion') < MIN_DATA_VERSION) {
     throw new LitematicError(
       'unsupported-version',
