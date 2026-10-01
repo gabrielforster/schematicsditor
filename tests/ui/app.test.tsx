@@ -67,6 +67,16 @@ describe('App shell', () => {
     await waitFor(() => expect(services.downloads.map((d) => d.fileName)).toEqual(['test.litematic']))
   })
 
+  it('commits an unfinished name edit before Ctrl+S saves', async () => {
+    const { services, controller } = await openedApp()
+    const name = screen.getByLabelText('Name') as HTMLInputElement
+    name.focus()
+    fireEvent.change(name, { target: { value: 'Fresh' } })
+    fireEvent.keyDown(name, { key: 's', ctrlKey: true })
+    await waitFor(() => expect(services.downloads.map((d) => d.fileName)).toEqual(['Fresh.litematic']))
+    expect(controller.state.doc!.schematic.metadata.name).toBe('Fresh')
+  })
+
   it('disables Save until a schematic is open', () => {
     renderApp()
     expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true)
@@ -97,6 +107,41 @@ describe('App shell', () => {
     await act(() => job)
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(controller.state.doc).toBeNull()
+  })
+
+  it('marks both dialogs modal and describes the confirm dialog by its message', async () => {
+    const { controller } = renderApp({ services: withSchematic(), controller: { largeFileBytes: 10 } })
+    act(() => { void controller.openFile(fakeFile('huge.litematic', 50 * 1024 * 1024)) })
+    const confirm = screen.getByRole('dialog')
+    expect(confirm.getAttribute('aria-modal')).toBe('true')
+    expect(document.getElementById(confirm.getAttribute('aria-describedby')!)!.textContent).toContain('huge.litematic is 50 MB')
+    act(() => controller.answerConfirm(false))
+    act(() => controller.showError(new Error('boom'), 'edit'))
+    expect(screen.getByRole('alertdialog').getAttribute('aria-modal')).toBe('true')
+  })
+
+  it('answers the confirm dialog with Cancel on Escape, without also cancelling box selection', async () => {
+    const { controller } = await openedApp({ controller: { largeFileBytes: 1000 } })
+    act(() => controller.startBoxSelection())
+    let job!: Promise<void>
+    act(() => { job = controller.openFile(fakeFile('huge.litematic', 50 * 1024 * 1024)) })
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Open anyway' }), { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await act(() => job)
+    expect(controller.state.doc!.fileName).toBe('castle.litematic')
+    expect(controller.state.selecting).toBe(true)
+  })
+
+  it('dismisses the error dialog on Escape, without also cancelling box selection', async () => {
+    const { controller } = await openedApp()
+    act(() => controller.startBoxSelection())
+    act(() => controller.showError(new Error('boom'), 'edit'))
+    fireEvent.keyDown(screen.getByRole('button', { name: 'OK' }), { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(controller.state.selecting).toBe(true)
+    // With no dialog open, Escape cancels box selection as before.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(controller.state.selecting).toBe(false)
   })
 
   it('edits name and author: Enter and blur commit, Escape reverts', async () => {

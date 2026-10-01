@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 import { act, fireEvent, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as materials from '../../src/core/materials'
 import { parseMatcher } from '../../src/core/edit/matchers'
 import { bundledRegistry } from '../../src/core/registry'
 import { fakeFile, fakeServices, parsesTo } from '../helpers/fakeServices'
 import { makeSchematic } from '../helpers/model'
 import { renderApp } from '../helpers/renderApp'
+
+// Wraps computeMaterials in a spy (same behavior) so tests can count recomputes.
+vi.mock('../../src/core/materials', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/core/materials')>()
+  return { ...actual, computeMaterials: vi.fn(actual.computeMaterials) }
+})
 
 // Y=0: 3 stone, 1 dirt. Y=1: 1 stone, 1 fire, 1 modded block, 1 air.
 const sample = () => makeSchematic([{
@@ -25,6 +32,20 @@ const cells = () =>
   Array.from(document.querySelectorAll('table.materials')[0]!.querySelectorAll('tbody tr'), (r) => Array.from(r.querySelectorAll('td'), (td) => td.textContent))
 
 describe('Materials tab', () => {
+  it('does not recount materials when the schematic is renamed', async () => {
+    const { controller } = await openedApp()
+    const compute = vi.mocked(materials.computeMaterials)
+    const before = compute.mock.calls.length
+    expect(before).toBeGreaterThan(0)
+    const name = screen.getByLabelText('Name') as HTMLInputElement
+    name.focus()
+    fireEvent.change(name, { target: { value: 'Renamed' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    expect(controller.state.doc!.schematic.metadata.name).toBe('Renamed')
+    expect(name.value).toBe('Renamed')
+    expect(compute.mock.calls.length).toBe(before)
+  })
+
   it('lists items by count with stacks and shulker boxes, unknown blocks marked, itemless blocks apart', async () => {
     const { tab } = await openedApp()
     expect(cells()).toEqual([
@@ -74,9 +95,27 @@ describe('Materials tab', () => {
     const row = tab.getByText('stone').closest('tr')!
     fireEvent.click(row)
     expect(renderer.highlight).toEqual(['minecraft:stone'])
-    expect(row.getAttribute('aria-selected')).toBe('true')
+    expect(row.getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(row)
     expect(renderer.highlight).toBeNull()
+  })
+
+  it('highlights rows from the keyboard with Enter and Space', async () => {
+    const { tab, renderer } = await openedApp()
+    const row = tab.getByRole('button', { name: /^stone/ })
+    expect(row.tagName).toBe('TR')
+    expect(row.tabIndex).toBe(0)
+    expect(row.getAttribute('aria-pressed')).toBe('false')
+    expect(fireEvent.keyDown(row, { key: 'Enter' })).toBe(false)
+    expect(renderer.highlight).toEqual(['minecraft:stone'])
+    expect(row.getAttribute('aria-pressed')).toBe('true')
+    expect(fireEvent.keyDown(row, { key: ' ' })).toBe(false)
+    expect(renderer.highlight).toBeNull()
+    const itemless = tab.getByRole('button', { name: /^fire/ })
+    expect(itemless.tabIndex).toBe(0)
+    fireEvent.keyDown(itemless, { key: 'Enter' })
+    expect(renderer.highlight).toEqual(['minecraft:fire'])
+    expect(itemless.getAttribute('aria-pressed')).toBe('true')
   })
 
   it('exports what is shown as CSV and copies it as text', async () => {

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import { NbtCompound, NbtString } from 'deepslate/nbt'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { PickHit } from '../../src/render'
 import type { ControllerOptions } from '../../src/ui/app/controller'
 import { fakeFile, fakeServices, parsesTo } from '../helpers/fakeServices'
@@ -121,6 +121,71 @@ describe('Replace tab', () => {
     expect(tab.getByText(hit.state)).toBeTruthy()
     pick(tab, 'Replacement block', 'stone')
     expect(preview(tab)).toBe('1 block match. 1 block will change.')
+  })
+
+  it('adds the first Alt+click pick after opening another file', async () => {
+    const { tab, renderer, controller, services } = await openedApp()
+    const hit: PickHit = { regionId: 0, regionName: 'r', local: { x: 0, y: 0, z: 0 }, world: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 }, state: 'minecraft:stone', distance: 1 }
+    act(() => renderer.emit('click', { hit, event: { altKey: true } as MouseEvent }))
+    expect(tab.getByText('minecraft:stone')).toBeTruthy()
+    services.parse = parsesTo(sample())
+    await act(() => controller.openFile(fakeFile('other.litematic')))
+    const replaceTab = within(screen.getByRole('tabpanel', { name: 'Replace' }))
+    expect(replaceTab.queryByText('minecraft:stone')).toBeNull()
+    act(() => renderer.emit('click', { hit, event: { altKey: true } as MouseEvent }))
+    expect(replaceTab.getByText('minecraft:stone')).toBeTruthy()
+  })
+
+  it('keeps Delete usable while the replacement block is invalid', async () => {
+    const { tab, keys } = await openedApp()
+    pick(tab, 'Block to replace', 'oak_stairs')
+    pick(tab, 'Replacement block', 'not_a_block')
+    expect(tab.getByText('Unknown block: minecraft:not_a_block')).toBeTruthy()
+    expect((tab.getByRole('button', { name: 'Replace' }) as HTMLButtonElement).disabled).toBe(true)
+    const del = tab.getByRole('button', { name: 'Delete' }) as HTMLButtonElement
+    expect(del.disabled).toBe(false)
+    fireEvent.click(del)
+    expect(keys()[3]).toBe('minecraft:air')
+  })
+
+  it('commits the scope Y range on blur or Enter, not on every keystroke', async () => {
+    const { tab, controller } = await openedApp()
+    pick(tab, 'Block to replace', 'stone')
+    pick(tab, 'Replacement block', 'andesite')
+    fireEvent.click(tab.getByRole('checkbox', { name: 'Y range' }))
+    const spy = vi.spyOn(controller.state.doc!.editor, 'previewReplace')
+    const minY = tab.getByRole('spinbutton', { name: 'Scope min Y' })
+    const maxY = tab.getByRole('spinbutton', { name: 'Scope max Y' })
+    fireEvent.change(minY, { target: { value: '1' } })
+    fireEvent.change(maxY, { target: { value: '1' } })
+    expect(spy).not.toHaveBeenCalled()
+    fireEvent.blur(minY)
+    fireEvent.keyDown(maxY, { key: 'Enter' })
+    expect(spy).toHaveBeenCalled()
+    expect(preview(tab)).toBe('4 blocks match. 4 blocks will change.')
+  })
+
+  it('does not rescan for the delete count when only the replacement changes', async () => {
+    const { tab, controller } = await openedApp()
+    pick(tab, 'Block to replace', 'stone')
+    pick(tab, 'Replacement block', 'andesite')
+    const spy = vi.spyOn(controller.state.doc!.editor, 'previewReplace')
+    pick(tab, 'Replacement block', 'granite')
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy.mock.calls[0]![0][0]!.to).toMatchObject({ name: 'minecraft:granite' })
+  })
+
+  it('does not recompute the preview when the schematic is renamed', async () => {
+    const { tab, controller } = await openedApp()
+    pick(tab, 'Block to replace', 'stone')
+    pick(tab, 'Replacement block', 'andesite')
+    const spy = vi.spyOn(controller.state.doc!.editor, 'previewReplace')
+    const name = screen.getByLabelText('Name') as HTMLInputElement
+    name.focus()
+    fireEvent.change(name, { target: { value: 'Renamed' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    expect(controller.state.doc!.schematic.metadata.name).toBe('Renamed')
+    expect(spy).not.toHaveBeenCalled()
   })
 
   it('suggests unknown blocks from the file in "from"', async () => {

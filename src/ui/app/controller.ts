@@ -50,6 +50,8 @@ export class AppController {
   /** Owner of the current `busy`; only the setter that owns it may clear it (overlapping opens/saves). */
   private busySeq = 0
   private busyOwner: number | null = null
+  /** A save is in flight; `busy` alone can't tell, since an overlapping open may clear or replace it. */
+  private saving = false
   /**
    * Set by the 'selection' listener so a box-completing click's own
    * 'selection' event doesn't also eyedrop. The real renderer emits
@@ -62,6 +64,8 @@ export class AppController {
    * same-tick 'click'.
    */
   private selectionConsumedClick = false
+  /** Eyedropper pick number; never reset, so the Replace tab sees every pick as new, even after opening another file. */
+  private pickSeq = 0
 
   private readonly largeFileBytes: number
   private readonly largeVolume: number
@@ -103,7 +107,7 @@ export class AppController {
     ]
     const doc = this.state.doc
     if (doc) renderer.load(doc.schematic, doc.editor)
-    this.store.setState({ render: renderer.status })
+    this.store.setState({ render: renderer.status, flyMode: renderer.flyMode })
     const detach = () => {
       offs.forEach((off) => off())
       if (this.renderer === renderer) this.renderer = null
@@ -121,7 +125,10 @@ export class AppController {
    * one finishes, the later one wins.
    */
   async openFile(file: OpenableFile): Promise<void> {
-    const token = ++this.openToken
+    // The token is taken only once the large-file confirm is accepted, so a
+    // declined open never discards an earlier open that is still in flight;
+    // an open that starts while this one waits at its confirm still wins.
+    const startedAt = this.openToken
     let warned = false
     if (file.size > this.largeFileBytes) {
       warned = true
@@ -131,19 +138,18 @@ export class AppController {
         message: `${file.name} is ${mb} MB. Reading it may take a while and use a lot of memory.`,
         confirmLabel: 'Open anyway',
       })
-      if (!ok || token !== this.openToken) return
+      if (!ok || startedAt !== this.openToken) return
     }
+    const token = ++this.openToken
     const owner = this.setBusy('open', `Opening ${file.name}…`)
     this.store.setState({ error: null })
     let schematic: Schematic
     try {
       schematic = await this.services.parse(await file.arrayBuffer())
     } catch (e) {
-      // Clear busy unconditionally: this open may be stale (a later one took
-      // over the token) but still be the one that owns the busy overlay, if
-      // the later open never reached its own busy-setting step (e.g. its own
-      // confirm was declined before then). Only show the error, though, when
-      // this open is still the current one.
+      // clearBusy is a no-op unless this open still owns the busy overlay (a
+      // later open or save takes it over). Only show the error when this open
+      // is still the current one.
       this.clearBusy(owner)
       if (token === this.openToken) this.store.setState({ error: friendlyError(e, 'open') })
       return
@@ -178,7 +184,8 @@ export class AppController {
   /** Saves through the round-trip guard and downloads `<name>.litematic` (spec §5, §11). */
   async save(): Promise<void> {
     const doc = this.state.doc
-    if (!doc || this.state.busy) return
+    if (!doc || this.state.busy || this.saving) return
+    this.saving = true
     const owner = this.setBusy('save', 'Saving…')
     this.store.setState({ error: null })
     try {
@@ -188,6 +195,8 @@ export class AppController {
     } catch (e) {
       this.clearBusy(owner)
       this.store.setState({ error: friendlyError(e, 'save') })
+    } finally {
+      this.saving = false
     }
   }
 
@@ -258,7 +267,7 @@ export class AppController {
   /** Not undoable; see Editor.setMetadata. */
   setMetadata(patch: Partial<EditableMetadata>): void {
     this.withEditor((editor) => {
-      if (editor.setMetadata(patch)) this.bump()
+      if (editor.setMetadata(patch)) this.store.setState({ metaRevision: this.state.metaRevision + 1 })
     })
   }
 
@@ -383,6 +392,6 @@ export class AppController {
 
   /** Alt+click eyedropper (spec §8.6): hands the state to the Replace tab's "from" list. */
   pickState(state: string): void {
-    this.store.setState({ picked: { state, seq: (this.state.picked?.seq ?? 0) + 1 }, tab: 'replace' })
+    this.store.setState({ picked: { state, seq: ++this.pickSeq }, tab: 'replace' })
   }
 }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { Box } from '../../core/edit/scopes'
 import type { LayerRange } from '../../render'
 import type { ScopeForm } from '../logic/scopeForm'
@@ -48,9 +49,9 @@ export function ScopeEditor({ form, onChange, regionNames, selection, layerRange
       </label>
       {form.yRange.on && (
         <div className="row">
-          <input type="number" step={1} aria-label="Scope min Y" value={form.yRange.minY} onChange={(e) => set({ yRange: { ...form.yRange, minY: e.target.value } })} />
+          <CommitNumber label="Scope min Y" value={form.yRange.minY} onCommit={(minY) => set({ yRange: { ...form.yRange, minY } })} />
           to
-          <input type="number" step={1} aria-label="Scope max Y" value={form.yRange.maxY} onChange={(e) => set({ yRange: { ...form.yRange, maxY: e.target.value } })} />
+          <CommitNumber label="Scope max Y" value={form.yRange.maxY} onCommit={(maxY) => set({ yRange: { ...form.yRange, maxY } })} />
         </div>
       )}
       <div className="row">
@@ -69,5 +70,30 @@ export function ScopeEditor({ form, onChange, regionNames, selection, layerRange
         <span className="hint">{selection ? boxText(selection) : '(none selected)'}</span>
       </label>
     </fieldset>
+  )
+}
+
+/**
+ * A number input that commits on blur or Enter, so the (full-scan) preview
+ * runs once per value instead of on every keystroke.
+ */
+function CommitNumber({ label, value, onCommit }: { label: string; value: string; onCommit: (value: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => setDraft(value), [value])
+  const commit = () => {
+    if (draft !== value) onCommit(draft)
+  }
+  return (
+    <input
+      type="number"
+      step={1}
+      aria-label={label}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+      }}
+    />
   )
 }

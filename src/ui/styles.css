@@ -113,8 +113,9 @@ table.materials th { position: sticky; top: 0; background: var(--panel); text-al
 table.materials th button { border: 0; padding: 2px 0; background: none; font-weight: 600; }
 table.materials td, table.materials th { padding: 2px 4px; border-bottom: 1px solid var(--border); }
 table.materials td.num, table.materials th.num { text-align: right; }
-table.materials tbody tr { cursor: pointer; }
-table.materials tbody tr[aria-selected='true'] { background: var(--accent-soft); }
+table.materials tbody tr[role='button'] { cursor: pointer; }
+table.materials tbody tr[aria-pressed='true'] { background: var(--accent-soft); }
+table.materials tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .badge { margin-left: 4px; padding: 0 4px; border-radius: 3px; background: var(--error); color: var(--error-text); font-size: 11px; }
 
 .picker { position: relative; }

@@ -128,10 +128,38 @@ describe('AppController.openFile', () => {
     expect(controller.state.busy).toEqual({ kind: 'open', label: 'Opening a.litematic…' })
     first.resolve(sample())
     await jobA
-    // A's own completion must still clear the busy it set, even though B's
-    // token now makes A the stale one (so A does not get to show its doc).
+    // A's own completion clears the busy it set, and since the declined B
+    // never took over, A is still the current open and shows its doc.
     expect(controller.state.busy).toBeNull()
-    expect(controller.state.doc).toBeNull()
+    expect(controller.state.doc?.fileName).toBe('a.litematic')
+  })
+
+  it('shows an earlier open when a later very large file is declined', async () => {
+    const first = deferred<ReturnType<typeof sample>>()
+    const a = sample()
+    const { controller } = setup({ largeFileBytes: 1000 }, fakeServices({ parse: () => first.promise }))
+    const jobA = controller.openFile(fakeFile('a.litematic', 10))
+    const jobB = controller.openFile(fakeFile('huge.litematic', 5000))
+    await Promise.resolve()
+    controller.answerConfirm(false)
+    await jobB
+    first.resolve(a)
+    await jobA
+    expect(controller.state.doc?.schematic).toBe(a)
+  })
+
+  it('lets a later open win over an earlier one still waiting at its large-file confirm', async () => {
+    const later = sample()
+    // b parses first (a is still at its confirm); a would parse second if it went ahead.
+    const parses = [async () => later, async () => sample()]
+    const { controller } = setup({ largeFileBytes: 1000 }, fakeServices({ parse: () => parses.shift()!() }))
+    const jobA = controller.openFile(fakeFile('huge.litematic', 5000))
+    await Promise.resolve()
+    expect(controller.state.confirm).toMatchObject({ title: 'Very large file' })
+    await controller.openFile(fakeFile('b.litematic', 10))
+    controller.answerConfirm(true)
+    await jobA
+    expect(controller.state.doc?.schematic).toBe(later)
   })
 
   it('clears busy cleanly when a later opens volume confirm is declined', async () => {
@@ -226,6 +254,25 @@ describe('AppController.save', () => {
     expect(services.downloads).toHaveLength(1)
   })
 
+  it('ignores a second save while one is running, even after an overlapping open cleared busy', async () => {
+    const pending = deferred<Uint8Array>()
+    let saves = 0
+    const { controller, services } = await opened()
+    services.save = () => { saves++; return pending.promise }
+    const job = controller.save()
+    // An open starts and finishes during the save, clearing busy.
+    await controller.openFile(fakeFile('other.litematic'))
+    expect(controller.state.busy).toBeNull()
+    const second = controller.save()
+    expect(saves).toBe(1)
+    pending.resolve(new Uint8Array([9]))
+    await Promise.all([job, second])
+    // Once the first save finishes, saving works again.
+    services.save = async () => { saves++; return new Uint8Array([7]) }
+    await controller.save()
+    expect(saves).toBe(2)
+  })
+
   it('does nothing without a schematic', async () => {
     const { controller, services } = setup()
     await controller.save()
@@ -282,13 +329,17 @@ describe('AppController edits', () => {
     expect(controller.state.lastEdit).toEqual({ message: 'Replaced 1 block.', undoable: false })
   })
 
-  it('sets metadata and bumps the revision', async () => {
+  it('sets metadata and bumps metaRevision without touching the block revision or the doc', async () => {
     const { controller, doc } = await opened()
+    const stats = controller.regionStats()
     controller.setMetadata({ name: 'Keep', author: 'Alex' })
     expect(doc.schematic.metadata).toMatchObject({ name: 'Keep', author: 'Alex' })
-    expect(controller.state.doc!.revision).toBe(1)
+    expect(controller.state.metaRevision).toBe(1)
+    expect(controller.state.doc).toBe(doc)
+    expect(controller.state.doc!.revision).toBe(0)
+    expect(controller.regionStats()).toBe(stats)
     controller.setMetadata({ name: 'Keep' })
-    expect(controller.state.doc!.revision).toBe(1)
+    expect(controller.state.metaRevision).toBe(1)
   })
 
   it('shows an error for metadata too long for NBT', async () => {
@@ -328,6 +379,17 @@ describe('AppController view state', () => {
     renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
     expect(controller.state.picked).toEqual({ state: hit.state, seq: 1 })
     expect(controller.state.tab).toBe('replace')
+    renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
+    expect(controller.state.picked?.seq).toBe(2)
+  })
+
+  it('keeps eyedropper pick numbers increasing across opened files', async () => {
+    const { controller, renderer } = await opened()
+    const hit = { regionId: 0, regionName: 'r', local: { x: 0, y: 0, z: 0 }, world: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 }, state: 'minecraft:stone', distance: 1 }
+    renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
+    expect(controller.state.picked?.seq).toBe(1)
+    await controller.openFile(fakeFile('other.litematic'))
+    expect(controller.state.picked).toBeNull()
     renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
     expect(controller.state.picked?.seq).toBe(2)
   })
@@ -403,6 +465,14 @@ describe('AppController view state', () => {
     expect(controller.state.selecting).toBe(false)
     controller.setSelection({ min: { x: 3, y: 0, z: 0 }, max: { x: 1, y: 0, z: 0 } })
     expect(controller.state.selection).toEqual({ min: { x: 1, y: 0, z: 0 }, max: { x: 3, y: 0, z: 0 } })
+  })
+
+  it('mirrors the attached renderer\'s fly mode', () => {
+    const controller = new AppController(fakeServices())
+    const renderer = new FakeRenderer()
+    renderer.flyMode = true
+    controller.attachRenderer(renderer)
+    expect(controller.state.flyMode).toBe(true)
   })
 
   it('stops listening to a detached renderer', async () => {
