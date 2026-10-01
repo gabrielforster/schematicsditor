@@ -1,8 +1,8 @@
-import type { NbtCompound } from 'deepslate/nbt'
+import { NbtCompound, NbtString } from 'deepslate/nbt'
 import type { BlockState, Region, Schematic } from '../model'
 import { blockStateKey, createBlockArray } from '../model'
 import type { BlockRegistry } from '../registry'
-import { keepsBlockEntity } from './blockEntities'
+import { blockEntityId, keepsBlockEntity } from './blockEntities'
 import { carryOver, validateTarget, type ReplaceTarget } from './carryOver'
 import { STATE_BYTES, tileEntityBytes, type BlocksEdit, type Edit, type PaletteEdit } from './edits'
 import { DirtyChunks, type RegionChange } from './events'
@@ -48,6 +48,12 @@ interface RegionPlan {
   /** Block indices whose block entity will be dropped. */
   dropTileEntities: number[]
   keptTileEntities: number
+  /**
+   * Kept block entities whose id must be rewritten (chest ↔ trapped chest):
+   * index → a copy of the original with `id` already rewritten. The
+   * original stays reachable through `region.tileEntities` until apply time.
+   */
+  rewriteTileEntities: Map<number, NbtCompound>
   /** Blocks path: states appended to the palette, and old slot → new slot (-1 = unchanged). */
   appended: BlockState[]
   slotMap: Int32Array
@@ -80,14 +86,23 @@ function planRegion(
   if (count === 0) return null
 
   const dropTileEntities: number[] = []
+  const rewriteTileEntities = new Map<number, NbtCompound>()
   let keptTileEntities = 0
   let undoBytes = 64
   for (const [index, te] of region.tileEntities) {
     const slot = region.blocks[index]!
     const target = targets[slot]
     if (!target || !(scope.whole || indexInScope(region.size, scope, index))) continue
-    if (keepsBlockEntity(region.palette[slot]!.name, target.name)) {
+    const fromName = region.palette[slot]!.name
+    if (keepsBlockEntity(fromName, target.name)) {
       keptTileEntities++
+      const fromId = blockEntityId(fromName)
+      const toId = blockEntityId(target.name)
+      if (fromId !== undefined && toId !== undefined && fromId !== toId) {
+        const copy = NbtCompound.fromJson(te.toJson()).set('id', new NbtString(toId))
+        rewriteTileEntities.set(index, copy)
+        undoBytes += tileEntityBytes(te) + tileEntityBytes(copy)
+      }
     } else {
       dropTileEntities.push(index)
       undoBytes += tileEntityBytes(te)
@@ -120,7 +135,7 @@ function planRegion(
   }
   return {
     regionId: scope.regionId, scope, targets, changingSlots, count,
-    dropTileEntities, keptTileEntities, appended, slotMap, undoBytes,
+    dropTileEntities, rewriteTileEntities, keptTileEntities, appended, slotMap, undoBytes,
   }
 }
 
@@ -172,6 +187,11 @@ export function applyReplace(
       removedTileEntities.set(index, region.tileEntities.get(index)!)
       region.tileEntities.delete(index)
     }
+    const addedTileEntities = p.rewriteTileEntities
+    for (const [index, copy] of addedTileEntities) {
+      removedTileEntities.set(index, region.tileEntities.get(index)!)
+      region.tileEntities.set(index, copy)
+    }
     if (p.scope.whole) {
       const edit: PaletteEdit = {
         kind: 'palette',
@@ -180,10 +200,11 @@ export function applyReplace(
         before: p.changingSlots.map((s) => region.palette[s]!),
         after: p.changingSlots.map((s) => p.targets[s]!),
         removedTileEntities,
+        addedTileEntities,
       }
       edit.slots.forEach((slot, k) => { region.palette[slot] = edit.after[k]! })
       edits.push(edit)
-      changes.push({ regionId: p.regionId, paletteChange: { indices: [...edit.slots] } })
+      changes.push({ regionId: p.regionId, paletteChange: { slots: [...edit.slots] } })
     } else {
       const paletteLength = region.palette.length
       region.palette.push(...p.appended)
@@ -207,7 +228,7 @@ export function applyReplace(
       })
       const edit: BlocksEdit = {
         kind: 'blocks', regionId: p.regionId, indices, values,
-        paletteLength, paletteAdded: p.appended, removedTileEntities,
+        paletteLength, paletteAdded: p.appended, removedTileEntities, addedTileEntities,
       }
       edits.push(edit)
       changes.push({ regionId: p.regionId, dirtyChunks: dirty.list() })

@@ -25,7 +25,7 @@ export function undoEdit(schematic: Schematic, edit: Edit): RegionChange {
   for (const [index, te] of edit.removedTileEntities) region.tileEntities.set(index, te)
   if (edit.kind === 'palette') {
     edit.slots.forEach((slot, k) => { region.palette[slot] = edit.before[k]! })
-    return { regionId: edit.regionId, paletteChange: { indices: [...edit.slots] } }
+    return { regionId: edit.regionId, paletteChange: { slots: [...edit.slots] } }
   }
   if (region.palette.length !== edit.paletteLength + edit.paletteAdded.length) {
     throw new Error(`history out of sync: region ${edit.regionId} palette has ${region.palette.length} entries`)
@@ -41,10 +41,16 @@ export function undoEdit(schematic: Schematic, edit: Edit): RegionChange {
 /** Re-apply an undone edit in place. */
 export function redoEdit(schematic: Schematic, edit: Edit): RegionChange {
   const region = regionOf(schematic, edit)
-  for (const index of edit.removedTileEntities.keys()) region.tileEntities.delete(index)
+  // Indices in both maps were kept with a rewritten id (not dropped): set
+  // the rewritten copy rather than deleting. Indices only in
+  // removedTileEntities were genuinely dropped.
+  for (const index of edit.removedTileEntities.keys()) {
+    if (!edit.addedTileEntities.has(index)) region.tileEntities.delete(index)
+  }
+  for (const [index, te] of edit.addedTileEntities) region.tileEntities.set(index, te)
   if (edit.kind === 'palette') {
     edit.slots.forEach((slot, k) => { region.palette[slot] = edit.after[k]! })
-    return { regionId: edit.regionId, paletteChange: { indices: [...edit.slots] } }
+    return { regionId: edit.regionId, paletteChange: { slots: [...edit.slots] } }
   }
   if (region.palette.length !== edit.paletteLength) {
     throw new Error(`history out of sync: region ${edit.regionId} palette has ${region.palette.length} entries`)

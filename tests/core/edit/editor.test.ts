@@ -32,7 +32,7 @@ describe('Editor', () => {
     const result = editor.replace([rule('stone', 'minecraft:andesite')], [])
     expect(result).toMatchObject({ count: 1, undoable: true })
     expect(keys()).toEqual(['minecraft:andesite', 'minecraft:dirt'])
-    expect(events).toEqual([[{ regionId: 0, paletteChange: { indices: [0] } }]])
+    expect(events).toEqual([[{ regionId: 0, paletteChange: { slots: [0] } }]])
     expect(editor.canUndo).toBe(true)
     expect(editor.history.undoLabel).toBe('Replace')
   })

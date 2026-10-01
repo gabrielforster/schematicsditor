@@ -13,15 +13,15 @@ export interface ChunkCoord {
 /**
  * What an edit changed, for the renderer (spec §3, §8.7). `regionId` is the
  * index into `schematic.regions`.
- * - `dirtyChunks`: block indices changed inside these chunks. Chunks that
- *   share a face with a changed block are included, because face culling
- *   there depends on it.
+ * - `dirtyChunks`: chunks containing a changed block. Chunks that share a
+ *   face with a changed block are included, because face culling there
+ *   depends on it.
  * - `paletteChange`: these palette slots now hold different states; every
  *   chunk containing one of them must be remeshed.
  */
 export type RegionChange =
   | { regionId: number; dirtyChunks: ChunkCoord[] }
-  | { regionId: number; paletteChange: { indices: number[] } }
+  | { regionId: number; paletteChange: { slots: number[] } }
 
 /** Collects the chunks touched by changed blocks of one region. */
 export class DirtyChunks {

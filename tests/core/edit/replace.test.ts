@@ -54,7 +54,7 @@ describe('applyReplace, whole region (palette edit)', () => {
     expect(blockKeys(s.regions[0]!)[1]).toBe('minecraft:spruce_stairs[facing=east,half=top,shape=straight,waterlogged=false]')
     expect(result.edits).toHaveLength(1)
     expect(result.edits[0]!.kind).toBe('palette')
-    expect(result.changes).toEqual([{ regionId: 0, paletteChange: { indices: [1] } }])
+    expect(result.changes).toEqual([{ regionId: 0, paletteChange: { slots: [1] } }])
   })
 
   it('keeps the blocks array untouched', () => {
@@ -138,6 +138,16 @@ describe('applyReplace rules', () => {
     expect(result.undoBytes).toBe(preview.undoBytes)
     expect(result.undoBytes).toBe(result.edits.reduce((n, e) => n + editBytes(e), 0))
   })
+
+  it('reports the same undo size as the edits it produced, scoped (blocks path)', () => {
+    const s = row()
+    const box = [{ kind: 'box', box: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 0, z: 0 } } }] as const
+    const preview = previewReplace(s, [rule('stone', 'minecraft:andesite')], box, registry)
+    const result = applyReplace(s, [rule('stone', 'minecraft:andesite')], box, registry)
+    expect(preview.undoBytes).toBeGreaterThan(0)
+    expect(result.undoBytes).toBe(preview.undoBytes)
+    expect(result.undoBytes).toBe(result.edits.reduce((n, e) => n + editBytes(e), 0))
+  })
 })
 
 describe('applyReplace block entities', () => {
@@ -176,6 +186,55 @@ describe('applyReplace block entities', () => {
     const s = chests()
     applyReplace(s, [rule('chest', 'minecraft:barrel')], [{ kind: 'box', box: { min: { x: 1, y: 0, z: 0 }, max: { x: 2, y: 0, z: 0 } } }], registry)
     expect([...s.regions[0]!.tileEntities.keys()]).toEqual([0])
+  })
+
+  it('rewrites the kept block entity id when chest becomes trapped chest, preserving other NBT', () => {
+    const s = makeSchematic([{
+      size: [1, 1, 1],
+      palette: ['minecraft:chest[facing=north,type=single,waterlogged=false]'],
+      blocks: [0],
+    }])
+    s.regions[0]!.tileEntities.set(0, new NbtCompound().set('id', new NbtString('minecraft:chest')).set('CustomName', new NbtString('"Loot"')))
+    const result = applyReplace(s, [rule('chest', 'minecraft:trapped_chest')], [], registry)
+    expect(result).toMatchObject({ blockEntitiesDropped: 0, blockEntitiesKept: 1 })
+    const te = s.regions[0]!.tileEntities.get(0)!
+    expect(te.getString('id')).toBe('minecraft:trapped_chest')
+    expect(te.getString('CustomName')).toBe('"Loot"')
+    const edit = result.edits[0]!
+    expect([...edit.addedTileEntities.keys()]).toEqual([0])
+    expect([...edit.removedTileEntities.keys()]).toEqual([0])
+    expect(edit.removedTileEntities.get(0)!.getString('id')).toBe('minecraft:chest')
+  })
+
+  it('rewrites the kept block entity id, scoped (blocks path)', () => {
+    const s = makeSchematic([{
+      size: [2, 1, 1],
+      palette: ['minecraft:chest[facing=north,type=single,waterlogged=false]', 'minecraft:stone'],
+      blocks: [0, 1],
+    }])
+    s.regions[0]!.tileEntities.set(0, new NbtCompound().set('id', new NbtString('minecraft:chest')))
+    const scope = [{ kind: 'box', box: { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } } }] as const
+    const result = applyReplace(s, [rule('chest', 'minecraft:trapped_chest')], scope, registry)
+    expect(result.edits[0]!.kind).toBe('blocks')
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:trapped_chest')
+  })
+
+  it('accounts for the rewritten copy in undoBytes', () => {
+    const chestEntity = () => new NbtCompound().set('id', new NbtString('minecraft:chest'))
+    const make = () => {
+      const s = makeSchematic([{
+        size: [1, 1, 1],
+        palette: ['minecraft:chest[facing=north,type=single,waterlogged=false]'],
+        blocks: [0],
+      }])
+      s.regions[0]!.tileEntities.set(0, chestEntity())
+      return s
+    }
+    const preview = previewReplace(make(), [rule('chest', 'minecraft:trapped_chest')], [], registry)
+    const s = make()
+    const result = applyReplace(s, [rule('chest', 'minecraft:trapped_chest')], [], registry)
+    expect(result.undoBytes).toBe(preview.undoBytes)
+    expect(result.undoBytes).toBe(result.edits.reduce((n, e) => n + editBytes(e), 0))
   })
 })
 
