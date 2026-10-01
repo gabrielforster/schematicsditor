@@ -1,8 +1,34 @@
 # Schematic Editor
 
 A static web app for previewing, inspecting and bulk-editing Litematica `.litematic` schematics.
+Everything runs in the browser; files are never uploaded.
+
+**Live:** https://gabrielforster.github.io/schematicsditor/
+
+## Usage
+
+1. Open the site and drop a `.litematic` file anywhere (or click **Open**). No file at hand?
+   Click **Open the sample schematic** for a small house with a garden.
+2. Look around: drag to orbit, right-drag to pan, scroll to zoom; **Fit view** recenters and
+   **Fly** switches to WASD. **Textured** / **Colored** switches the render mode. Textures
+   come from [misode/mcmeta](https://github.com/misode/mcmeta); offline, the view falls back
+   to colored mode.
+3. Inspect: the left panel shows and hides regions, draws a box selection (**Pick corners**)
+   and limits the visible layers (**From Y** / **To Y**, **Single layer**, ↑/↓). The
+   **Materials** tab counts items, stacks and shulker boxes, exports CSV or text, and
+   highlights a material in the view when you click its row.
+4. Edit: **Replace** swaps blocks (with property carry-over, scopes and a preview count);
+   **Family swap** turns a whole wood, stone or color family into another. Ctrl+Z / Ctrl+Y
+   undo and redo.
+5. Save: **Save** or Ctrl+S downloads `<name>.litematic`. The file is re-read and compared
+   before the download starts; a mismatch blocks the download with an error.
+
+Supported: Minecraft 1.13 and newer (`MinecraftDataVersion` ≥ 1519).
 
 ## Development
+
+Node 24 is required (`.nvmrc` and `.mise.toml` pin 24.16.0; with mise, run `mise trust` once
+if it asks).
 
 ```bash
 npm install
@@ -10,14 +36,47 @@ npm run dev        # dev server
 npm test           # unit tests (Vitest)
 npm run typecheck
 npm run build      # static build in dist/
+npm run test:e2e   # end-to-end test (Playwright, Chromium), against a production build
 ```
 
-## Round-trip fixtures
+Before the first `npm run test:e2e`, install the browser once: `npx playwright install chromium`
+(on a fresh Linux machine: `npx playwright install --with-deps chromium`). The end-to-end test
+blocks every request that leaves the local server, so it needs no network and always renders
+in colored mode.
 
-Put real `.litematic` files exported from the game in `tests/fixtures/`. Every file there
-must survive read → save → read unchanged (`tests/core/litematic/fixtures.test.ts`). Useful
-coverage: single region, multiple regions, a region placed with negative size, chests/signs
-(tile entities), mobs/item frames (entities), and files from several Minecraft versions.
+## Deployment
+
+`.github/workflows/deploy.yml` builds the site with Node 24 and publishes `dist/` to GitHub
+Pages on every push to `master` (or by hand from the Actions tab). `.github/workflows/ci.yml`
+runs the typecheck, unit tests, build and end-to-end test on every pull request.
+
+One-time setup by the repository owner: **Settings → Pages → Build and deployment → Source:
+GitHub Actions**. Until that is set, the deploy job fails with HTTP 404 when it creates the deployment.
+The build uses relative asset paths (`base: './'`), so it works under
+`https://<owner>.github.io/<repo>/` without further configuration.
+
+## Sample schematic and round-trip fixtures
+
+`scripts/samples/samples.ts` builds small synthetic schematics with the core writer:
+
+- `src/assets/sample.litematic` — the empty state's sample (a house with stairs, glass, a door,
+  a chest with items and a wall torch, plus a garden region stored with a negative size and an
+  armor stand). The same file is `tests/fixtures/sample-house.litematic` and the end-to-end
+  fixture.
+- `tests/fixtures/wide-palette.litematic` — 301 palette entries (9-bit packing), a mod block
+  and unknown tags at every level.
+
+After changing a builder, regenerate and commit the files:
+
+```bash
+npm run generate:samples
+npm test           # tests/scripts/samples.test.ts fails while a committed file is stale
+```
+
+Every `.litematic` file in `tests/fixtures/` must survive read → save → read unchanged
+(`tests/core/litematic/fixtures.test.ts`). Add real files exported from the game there too:
+multiple regions, regions placed with negative size, chests and signs (tile entities), mobs
+and item frames (entities), and files from several Minecraft versions.
 
 ## Block data
 
@@ -89,10 +148,17 @@ After changing anything under `src/ui/` or `src/workers/`, run `npm run dev`:
 
 ## Manual in-game check
 
-After changing anything under `src/core/litematic/`:
+After changing anything under `src/core/litematic/`, and before each release:
 
-1. `npm run dev`, open a fixture, click **Save**.
-2. Copy the downloaded file into `.minecraft/schematics/`.
-3. In game, open Litematica's *Load Schematics* menu, load the file and place it.
-4. Verify: it loads without errors, block count in the schematic info matches, chests keep
-   their contents, signs keep their text, and entities (item frames, armor stands) are present.
+1. Open the live site (or `npm run dev`), click **Open the sample schematic**, replace
+   `oak_planks` with `spruce_planks`, and press Ctrl+S. Do the same with at least one real
+   schematic of your own.
+2. Copy the downloaded files into `.minecraft/schematics/`.
+3. In game, open Litematica's *Load Schematics* menu, load each file and place it.
+4. Verify: it loads without errors and the block count in the schematic info matches the
+   editor's stats. For the sample: the walls are spruce, the chest holds 16 torches, 8 bread
+   and 3 oak saplings, water sits in the garden, and the armor stand stands on the grass in
+   the garden's south-east part, inside the fence (it is stored relative to the garden's
+   raw Position, so a misplaced stand means entity positions broke). For your own files:
+   chests keep their contents, signs keep their text, and entities (item frames, armor
+   stands) are where they were.
