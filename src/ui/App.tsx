@@ -1,7 +1,9 @@
 import type { AppController } from './app/controller'
 import { ConfirmDialog, ErrorDialog } from './components/Dialogs'
 import { EmptyState, type SampleSlot } from './components/EmptyState'
+import { Notices } from './components/Notices'
 import { TopBar } from './components/TopBar'
+import { Viewport } from './components/Viewport'
 import { ControllerContext, useApp, useController } from './hooks'
 import { useFileDrop } from './useFileDrop'
 import { useShortcuts } from './useShortcuts'
@@ -28,8 +30,10 @@ function Shell({ sample }: { sample?: SampleSlot | undefined }) {
   return (
     <div className="app" {...drop.handlers}>
       <TopBar />
+      <Notices />
       <main className="workspace">
         <section className="center">
+          <Viewport />
           {!doc && <EmptyState sample={sample} />}
         </section>
       </main>
