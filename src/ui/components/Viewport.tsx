@@ -46,8 +46,8 @@ function StatsOverlay() {
   const blocks = controller.regionStats().reduce((n, r) => n + r.blocks, 0)
   const parts = [`${blocks.toLocaleString('en-US')} blocks`]
   if (render) {
-    const { total, queued, meshing, failed } = render.chunks
-    parts.push(`${Math.max(0, total - queued - meshing)}/${total} chunks`)
+    const { total, queued, parked, meshing, failed } = render.chunks
+    parts.push(`${Math.max(0, total - queued - parked - meshing)}/${total} chunks`)
     if (queued + meshing > 0) parts.push(`meshing ${queued + meshing}`)
     if (failed > 0) parts.push(`${failed} failed`)
   }
@@ -69,7 +69,7 @@ function HoverTooltip({ hit, x, y }: { hit: PickHit; x: number; y: number }) {
 function ViewButtons() {
   const controller = useController()
   const doc = useApp((s) => s.doc)
-  const [fly, setFly] = useState(false)
+  const fly = useApp((s) => s.flyMode)
   if (!doc) return null
   return (
     <div className="view-buttons">
@@ -78,10 +78,7 @@ function ViewButtons() {
         type="button"
         aria-pressed={fly}
         title="Fly with WASD, Space and Shift"
-        onClick={() => {
-          controller.setFlyMode(!fly)
-          setFly(!fly)
-        }}
+        onClick={() => controller.setFlyMode(!fly)}
       >
         Fly
       </button>
