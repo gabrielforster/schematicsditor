@@ -9,7 +9,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "generate:registry": "node scripts/generate-registry.mjs",
-    "generate:palette": "tsx scripts/generate-palette.ts"
+    "generate:palette": "tsx scripts/generate-palette.ts",
+    "generate:samples": "tsx scripts/generate-samples.ts"
   },
   "dependencies": {
     "deepslate": "^0.27.2",
