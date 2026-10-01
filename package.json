@@ -8,13 +8,19 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "generate:registry": "node scripts/generate-registry.mjs"
+    "generate:registry": "node scripts/generate-registry.mjs",
+    "generate:palette": "tsx scripts/generate-palette.ts"
   },
   "dependencies": {
-    "deepslate": "^0.27.2"
+    "deepslate": "^0.27.2",
+    "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "@types/pngjs": "^6.0.5",
+    "@types/three": "^0.186.0",
+    "pngjs": "^7.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "vitest": "^5.0.3"
