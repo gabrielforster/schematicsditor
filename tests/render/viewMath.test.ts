@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BoxSelectionTool, normalizeBox } from '../../src/render/selection'
-import { fitView, flyDelta, schematicBounds, shouldSuggestColored } from '../../src/render/viewMath'
+import { clipPlanes, fitView, flyDelta, schematicBounds, shouldSuggestColored } from '../../src/render/viewMath'
 import { makeSchematic } from '../helpers/model'
 
 const NO_KEYS = { forward: false, back: false, left: false, right: false, up: false, down: false }
@@ -75,6 +75,31 @@ describe('fitView', () => {
   it('backs off further in a narrow viewport', () => {
     const box = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } }
     expect(fitView(box, 60, 0.5).position.x).toBeGreaterThan(fitView(box, 60, 1).position.x)
+  })
+})
+
+describe('clipPlanes', () => {
+  const box = { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } }
+
+  it('scales near with the distance to the box and reaches past its farthest corner', () => {
+    const c = clipPlanes({ x: 5, y: 5, z: -100 }, box)
+    expect(c.near).toBeCloseTo(1)
+    expect(c.far).toBeCloseTo(Math.hypot(5, 5, 110) * 1.1)
+  })
+
+  it('uses the smallest near plane with the camera inside the box', () => {
+    expect(clipPlanes({ x: 5, y: 5, z: 5 }, box)).toEqual({ near: 0.05, far: 100 })
+  })
+
+  it('keeps the near plane small close to the box', () => {
+    expect(clipPlanes({ x: 11, y: 5, z: 5 }, box).near).toBe(0.05)
+  })
+
+  it('still sees the whole box from far away', () => {
+    const c = clipPlanes({ x: 5, y: 5, z: 100_000 }, box)
+    expect(c.near).toBeLessThan(100_000 - 10)
+    expect(c.near).toBeLessThanOrEqual(100)
+    expect(c.far).toBeGreaterThan(100_000 + 5)
   })
 })
 

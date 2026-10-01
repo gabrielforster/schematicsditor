@@ -1,5 +1,5 @@
 import { Box3Helper, DataTexture, Mesh, type Object3D } from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ChunkMeshes, MeshData } from '../../../src/render/mesh/types'
 import { ThreeChunkView } from '../../../src/render/three/chunkView'
 import { atlasTexture, toGeometry } from '../../../src/render/three/geometry'
@@ -111,5 +111,29 @@ describe('ThreeChunkView', () => {
     expect(region.visible).toBe(false)
     view.clear()
     expect(region.children).toHaveLength(0)
+  })
+})
+
+describe('ChunkMaterials', () => {
+  const texture = () => atlasTexture({ width: 1, height: 1, data: new Uint8Array(4) })
+
+  it('disposes the old atlas texture when a new one is set', () => {
+    const materials = new ChunkMaterials()
+    const old = texture()
+    const dispose = vi.spyOn(old, 'dispose')
+    materials.setAtlas(old)
+    materials.setAtlas(old)
+    expect(dispose).not.toHaveBeenCalled()
+    materials.setAtlas(texture())
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it('disposes the atlas texture on dispose', () => {
+    const materials = new ChunkMaterials()
+    const atlas = texture()
+    const dispose = vi.spyOn(atlas, 'dispose')
+    materials.setAtlas(atlas)
+    materials.dispose()
+    expect(dispose).toHaveBeenCalledOnce()
   })
 })

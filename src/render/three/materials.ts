@@ -12,14 +12,18 @@ export const RENDER_ORDER: Record<MeshBucket, number> = { opaque: 0, transparent
 export class ChunkMaterials {
   private readonly colored: Record<MeshBucket, MeshBasicMaterial>
   private textured: Record<MeshBucket, MeshBasicMaterial> | null = null
+  private atlas: Texture | null = null
 
   constructor() {
     this.colored = makeSet(null)
   }
 
-  /** Sets the atlas for textured meshes; null drops it. */
+  /** Sets the atlas for textured meshes; null drops it. Takes ownership: the previous atlas texture is disposed. */
   setAtlas(atlas: Texture | null): void {
+    if (atlas === this.atlas) return
     if (this.textured) for (const m of Object.values(this.textured)) m.dispose()
+    this.atlas?.dispose()
+    this.atlas = atlas
     this.textured = atlas ? makeSet(atlas) : null
   }
 

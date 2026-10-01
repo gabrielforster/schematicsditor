@@ -1,8 +1,8 @@
-import { Color, LinearSRGBColorSpace, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three'
+import { Color, LinearSRGBColorSpace, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, WebGLRenderer } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { Vec3 } from '../../core/model'
 import type { Ray } from '../pick/dda'
-import { fitView, flyDelta, type Bounds, type FlyKeys } from '../viewMath'
+import { clipPlanes, fitView, flyDelta, type Bounds, type FlyKeys } from '../viewMath'
 
 const FLY_KEYS: Record<string, keyof FlyKeys> = {
   KeyW: 'forward', KeyS: 'back', KeyA: 'left', KeyD: 'right', Space: 'up', ShiftLeft: 'down', ShiftRight: 'down',
@@ -21,12 +21,19 @@ export class Viewport {
   readonly scene = new Scene()
   readonly camera = new PerspectiveCamera(60, 1, 0.1, 10000)
   readonly controls: OrbitControls
-  /** Called every frame before rendering, with seconds since the last frame. */
-  onFrame: ((seconds: number) => void) | null = null
+  /**
+   * Called every frame before rendering, with seconds since the last frame
+   * and whether the camera moved since the previous frame.
+   */
+  onFrame: ((seconds: number, cameraMoved: boolean) => void) | null = null
+  /** The schematic's box; the near and far planes follow the camera's distance to it every frame. */
+  clipBounds: Bounds | null = null
   private fly = false
   private readonly keys: FlyKeys = { forward: false, back: false, left: false, right: false, up: false, down: false }
   private readonly resize: ResizeObserver
   private last = performance.now()
+  private readonly lastPosition = new Vector3(NaN, NaN, NaN)
+  private readonly lastRotation = new Quaternion(NaN, NaN, NaN, NaN)
 
   constructor(private readonly container: HTMLElement) {
     this.renderer = new WebGLRenderer({ antialias: true })
@@ -63,11 +70,9 @@ export class Viewport {
     if (!bounds) return
     const f = fitView(bounds, this.camera.fov, this.camera.aspect)
     this.camera.position.set(f.position.x, f.position.y, f.position.z)
-    this.camera.near = f.near
-    this.camera.far = f.far
-    this.camera.updateProjectionMatrix()
     this.controls.target.set(f.target.x, f.target.y, f.target.z)
     this.controls.update()
+    this.updateClipPlanes(this.clipBounds ?? bounds)
   }
 
   cameraPosition(): Vec3 {
@@ -92,6 +97,7 @@ export class Viewport {
     window.removeEventListener('blur', this.onBlur)
     this.controls.dispose()
     this.renderer.dispose()
+    this.renderer.forceContextLoss()
     this.canvas.remove()
   }
 
@@ -106,8 +112,22 @@ export class Viewport {
       this.controls.target.add(new Vector3(d.x, d.y, d.z))
       this.controls.update()
     }
-    this.onFrame?.(seconds)
+    const cam = this.camera
+    const moved = !cam.position.equals(this.lastPosition) || !cam.quaternion.equals(this.lastRotation)
+    this.lastPosition.copy(cam.position)
+    this.lastRotation.copy(cam.quaternion)
+    if (this.clipBounds) this.updateClipPlanes(this.clipBounds)
+    this.onFrame?.(seconds, moved)
     this.renderer.render(this.scene, this.camera)
+  }
+
+  /** Near/far from the camera's distance to `bounds`; the projection is rebuilt only when they change. */
+  private updateClipPlanes(bounds: Bounds): void {
+    const { near, far } = clipPlanes(this.cameraPosition(), bounds)
+    if (near === this.camera.near && far === this.camera.far) return
+    this.camera.near = near
+    this.camera.far = far
+    this.camera.updateProjectionMatrix()
   }
 
   private fitCanvas(): void {

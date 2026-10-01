@@ -72,6 +72,36 @@ export function fitView(bounds: Bounds, fovDegrees: number, aspect: number): Cam
   }
 }
 
+/** Bounds of the near plane (blocks) and the smallest far plane. */
+const MIN_NEAR = 0.05
+const MAX_NEAR = 100
+const MIN_FAR = 100
+
+/**
+ * Camera clip planes for the current camera position (recomputed every
+ * frame, so zooming in, flying and zooming out never clip the schematic):
+ * near is 1% of the distance to the box (0.05 inside it), far reaches 10%
+ * past the box's farthest corner.
+ */
+export function clipPlanes(camera: Vec3, bounds: Bounds): { near: number; far: number } {
+  const gap = (v: number, lo: number, hi: number) => Math.max(lo - v, 0, v - hi)
+  const toBox = Math.hypot(
+    gap(camera.x, bounds.min.x, bounds.max.x),
+    gap(camera.y, bounds.min.y, bounds.max.y),
+    gap(camera.z, bounds.min.z, bounds.max.z),
+  )
+  const reach = (v: number, lo: number, hi: number) => Math.max(Math.abs(v - lo), Math.abs(v - hi))
+  const farthest = Math.hypot(
+    reach(camera.x, bounds.min.x, bounds.max.x),
+    reach(camera.y, bounds.min.y, bounds.max.y),
+    reach(camera.z, bounds.min.z, bounds.max.z),
+  )
+  return {
+    near: Math.min(MAX_NEAR, Math.max(MIN_NEAR, toBox * 0.01)),
+    far: Math.max(MIN_FAR, farthest * 1.1),
+  }
+}
+
 export interface FlyKeys {
   forward: boolean
   back: boolean
