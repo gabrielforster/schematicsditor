@@ -52,7 +52,10 @@ export function recomputeMetadata(schematic: Schematic, now: number): Metadata {
     regionCount: schematic.regions.length,
     totalBlocks,
     totalVolume,
-    enclosingSize: { x: max.x - min.x, y: max.y - min.y, z: max.z - min.z },
+    // With no regions min/max stay ±Infinity; report an empty box, not NaN.
+    enclosingSize: schematic.regions.length === 0
+      ? { x: 0, y: 0, z: 0 }
+      : { x: max.x - min.x, y: max.y - min.y, z: max.z - min.z },
     timeModified: now,
   }
 }
