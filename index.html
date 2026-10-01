@@ -4,57 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Schematic Editor</title>
-    <style>
-      body { margin: 0; font: 13px system-ui, sans-serif; display: grid; grid-template-columns: 320px 1fr; height: 100vh; }
-      #panel { overflow: auto; padding: 8px; border-right: 1px solid #ccc; }
-      #panel fieldset { margin: 0 0 8px; }
-      #panel input[type=number] { width: 4.5em; }
-      #viewport { position: relative; min-width: 0; }
-      #hover { position: absolute; left: 8px; bottom: 8px; color: #fff; background: #0008; padding: 2px 6px; pointer-events: none; }
-      pre { white-space: pre-wrap; margin: 0; }
-    </style>
   </head>
   <body>
-    <div id="panel">
-      <fieldset>
-        <legend>File</legend>
-        <input id="file" type="file" accept=".litematic" />
-        <button id="save" disabled>Save</button>
-      </fieldset>
-      <fieldset>
-        <legend>View</legend>
-        <select id="mode"><option value="textured">Textured</option><option value="colored">Colored</option></select>
-        <button id="retry" hidden>Retry textures</button>
-        <button id="fit">Fit</button>
-        <label><input id="fly" type="checkbox" /> Fly (WASD)</label>
-        <div id="regions"></div>
-      </fieldset>
-      <fieldset>
-        <legend>Layers (↑/↓ steps)</legend>
-        Y <input id="minY" type="number" /> to <input id="maxY" type="number" />
-        <label><input id="single" type="checkbox" /> Single</label>
-        <button id="applyLayers">Apply</button> <button id="allLayers">All</button>
-      </fieldset>
-      <fieldset>
-        <legend>Highlight</legend>
-        <input id="highlight" placeholder="minecraft:stone, minecraft:dirt" />
-        <button id="applyHighlight">Apply</button> <button id="clearHighlight">Clear</button>
-      </fieldset>
-      <fieldset>
-        <legend>Box selection</legend>
-        <button id="pickBox">Pick two corners</button> <button id="clearBox">Clear</button><br />
-        min <input id="bx0" type="number" /><input id="by0" type="number" /><input id="bz0" type="number" /><br />
-        max <input id="bx1" type="number" /><input id="by1" type="number" /><input id="bz1" type="number" />
-        <button id="applyBox">Apply</button>
-      </fieldset>
-      <fieldset>
-        <legend>Replace (whole schematic)</legend>
-        <input id="from" placeholder="minecraft:stone" /> → <input id="to" placeholder="minecraft:andesite" />
-        <button id="replace" disabled>Replace</button> <button id="undo" disabled>Undo</button>
-      </fieldset>
-      <pre id="out"></pre>
-    </div>
-    <div id="viewport"><div id="hover"></div></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
