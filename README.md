@@ -46,6 +46,26 @@ npm test                            # the palette version must match the registr
 Textured mode fetches block models and the texture atlas for the file's Minecraft version
 from mcmeta at runtime and keeps them in the browser's Cache API.
 
+## Manual rendering check
+
+After changing anything under `src/render/`, run `npm run dev` and open a schematic that has
+glass, water, stairs, leaves, a chest and at least one block from a mod:
+
+1. Textured mode: textures appear after a short colored phase; the mod block is a magenta
+   cube; water and stained glass are see-through; no gaps or missing faces between chunks.
+2. Colored mode: the same shapes as solid colors; glass and water are translucent.
+3. Layers: set a Y range; cut faces look solid. ↑/↓ moves the range. With **Single** checked,
+   the layer below shows faded.
+4. Highlight `minecraft:stone`: stone stays solid, everything else fades.
+5. **Pick two corners**, click two blocks: a yellow box appears and the min/max fields fill in.
+   Editing the numbers and clicking **Apply** moves the box.
+6. Hovering shows the block state and coordinates.
+7. Replace `minecraft:stone` → `minecraft:gold_block`: the view updates; **Undo** restores it.
+8. In DevTools, clear site data and go offline, then reload and open the file: the view
+   falls back to colored with **Retry textures**. Go online and click it: textures return.
+   Reload offline again: textures load from the cache.
+9. **Fly**: WASD, Space and Shift move the camera.
+
 ## Manual in-game check
 
 After changing anything under `src/core/litematic/`:
