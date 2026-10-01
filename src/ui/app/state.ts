@@ -53,6 +53,8 @@ export interface AppState {
   /** Outcome of the last edit, for the status line. */
   lastEdit: { message: string; undoable: boolean } | null
   dismissed: readonly DismissableNotice[]
+  /** Mirrors the renderer's fly mode so the Fly button's pressed state can't drift from it. */
+  flyMode: boolean
 }
 
 export const initialState: AppState = {
@@ -71,4 +73,5 @@ export const initialState: AppState = {
   picked: null,
   lastEdit: null,
   dismissed: [],
+  flyMode: false,
 }

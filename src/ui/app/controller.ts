@@ -378,6 +378,7 @@ export class AppController {
 
   setFlyMode(on: boolean): void {
     this.renderer?.setFlyMode(on)
+    this.store.setState({ flyMode: on })
   }
 
   /** Alt+click eyedropper (spec §8.6): hands the state to the Replace tab's "from" list. */

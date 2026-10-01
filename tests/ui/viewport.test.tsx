@@ -37,6 +37,12 @@ describe('Viewport', () => {
     expect(screen.getByTestId('stats').textContent).toBe('2 blocks · 10/10 chunks')
   })
 
+  it('excludes parked chunks (hidden regions, not yet meshed) from the finished count', async () => {
+    const { renderer } = await openedApp()
+    act(() => renderer.emit('status', idleStatus({ chunks: { total: 10, queued: 0, parked: 3, meshing: 0, failed: 0 } })))
+    expect(screen.getByTestId('stats').textContent).toBe('2 blocks · 7/10 chunks')
+  })
+
   it('shows the hovered block state and coordinates next to the pointer', async () => {
     const { renderer } = await openedApp()
     fireEvent.pointerMove(screen.getByTestId('viewport'), { clientX: 100, clientY: 50 })
