@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { NbtString } from 'deepslate/nbt'
 import { readLitematic } from '../../../src/core/litematic/read'
-import { diffSchematics, RoundTripError, saveLitematic } from '../../../src/core/litematic/save'
-import { encodeLitematic, prepareForWrite } from '../../../src/core/litematic/write'
+import { diffSchematics, RoundTripError, saveLitematic, saveLitematicAsync } from '../../../src/core/litematic/save'
+import { encodeLitematic, encodeLitematicAsync, prepareForWrite } from '../../../src/core/litematic/write'
 import type { Schematic } from '../../../src/core/model'
-import { writeNbt } from '../../../src/core/nbt'
+import { readNbt, writeNbt } from '../../../src/core/nbt'
 import { litematicNbt, tileEntity, type LitematicSpec } from '../../helpers/litematicNbt'
 
 const read = (spec: LitematicSpec) => readLitematic(writeNbt(litematicNbt(spec)))
@@ -118,5 +118,39 @@ describe('saveLitematic', () => {
       return { ...prepared, regions }
     }
     expect(() => saveLitematic(read(sample()), NOW, encodeLitematic, corrupt)).toThrow(RoundTripError)
+  })
+})
+
+describe('saveLitematicAsync', () => {
+  it('returns gzip bytes that read back as the saved model', async () => {
+    const { bytes, saved } = await saveLitematicAsync(read(sample()), NOW)
+    expect([bytes[0], bytes[1]]).toEqual([0x1f, 0x8b])
+    expect(diffSchematics(saved, readLitematic(bytes))).toEqual([])
+    expect(saved.metadata.timeModified).toBe(NOW)
+  })
+
+  it('writes the same NBT as saveLitematic', async () => {
+    const a = readNbt(saveLitematic(read(sample()), NOW).bytes)
+    const b = readNbt((await saveLitematicAsync(read(sample()), NOW)).bytes)
+    expect(a.equals(b)).toBe(true)
+  })
+
+  it('leaves the live model untouched', async () => {
+    const s = read(sample())
+    const blocks = s.regions[0]!.blocks
+    const before = Array.from(blocks)
+    await saveLitematicAsync(s, NOW)
+    expect(s.regions[0]!.blocks).toBe(blocks)
+    expect(Array.from(blocks)).toEqual(before)
+    expect(s.metadata.timeModified).not.toBe(NOW)
+  })
+
+  it('rejects with RoundTripError when the encoded bytes do not match', async () => {
+    const lossy = (s: Schematic) => encodeLitematicAsync({ ...s, metadata: { ...s.metadata, author: 'someone else' } })
+    await expect(saveLitematicAsync(read(sample()), NOW, lossy)).rejects.toThrow(RoundTripError)
+  })
+
+  it('rejects with RoundTripError when the encoded bytes cannot be read', async () => {
+    await expect(saveLitematicAsync(read(sample()), NOW, async () => new Uint8Array([1, 2, 3]))).rejects.toThrow(RoundTripError)
   })
 })

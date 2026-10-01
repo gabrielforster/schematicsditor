@@ -1,7 +1,7 @@
 import { NbtCompound, NbtLongArray } from 'deepslate/nbt'
 import type { BlockState, Metadata, Region, Schematic, Vec3 } from '../model'
 import { blockIndex, createBlockArray, volumeOf } from '../model'
-import { NbtReadError, longArrayToWords, readNbt } from '../nbt'
+import { NbtReadError, longArrayToWords, readNbt, readNbtAsync } from '../nbt'
 import { bitsForPalette, unpackBits } from './bits'
 import { LitematicError } from './errors'
 
@@ -19,6 +19,20 @@ export function readLitematic(bytes: Uint8Array): Schematic {
   let root: NbtCompound
   try {
     root = readNbt(bytes)
+  } catch (cause) {
+    if (cause instanceof NbtReadError) {
+      throw new LitematicError('not-nbt', 'This file is not a valid NBT file.', { cause })
+    }
+    throw cause
+  }
+  return decodeLitematic(root)
+}
+
+/** `readLitematic` with native gunzip where available (see readNbtAsync). Same errors. */
+export async function readLitematicAsync(bytes: Uint8Array): Promise<Schematic> {
+  let root: NbtCompound
+  try {
+    root = await readNbtAsync(bytes)
   } catch (cause) {
     if (cause instanceof NbtReadError) {
       throw new LitematicError('not-nbt', 'This file is not a valid NBT file.', { cause })

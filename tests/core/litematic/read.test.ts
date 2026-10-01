@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NbtCompound, NbtList, NbtString } from 'deepslate/nbt'
 import { LitematicError } from '../../../src/core/litematic/errors'
-import { readLitematic } from '../../../src/core/litematic/read'
+import { readLitematic, readLitematicAsync } from '../../../src/core/litematic/read'
 import { blockAt, blockStateKey } from '../../../src/core/model'
 import { writeNbt } from '../../../src/core/nbt'
 import { litematicNbt, tileEntity, type LitematicSpec } from '../../helpers/litematicNbt'
@@ -147,5 +147,17 @@ describe('readLitematic', () => {
 
   it('rejects an empty palette', () => {
     expectLitematicError(() => read({ regions: [{ size: [1, 1, 1], palette: [] }] }), 'corrupt')
+  })
+})
+
+describe('readLitematicAsync', () => {
+  it('reads the same model as readLitematic', async () => {
+    const bytes = writeNbt(litematicNbt({ regions: [{ size: [2, 1, 1], palette: ['minecraft:air', 'minecraft:stone'], blocks: [1, 0] }] }))
+    const s = await readLitematicAsync(bytes)
+    expect(blockStateKey(blockAt(s.regions[0]!, 0, 0, 0))).toBe('minecraft:stone')
+  })
+
+  it('rejects non-NBT input with a not-nbt LitematicError', async () => {
+    await expect(readLitematicAsync(new TextEncoder().encode('hello'))).rejects.toMatchObject({ name: 'LitematicError', code: 'not-nbt' })
   })
 })
