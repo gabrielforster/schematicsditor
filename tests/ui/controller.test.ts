@@ -352,6 +352,20 @@ describe('AppController view state', () => {
     expect(controller.state.picked).toEqual({ state: hit.state, seq: 1 })
   })
 
+  it('still eyedrops an alt+click after a programmatic selection update (e.g. a numeric bounds edit)', async () => {
+    const { controller, renderer } = await opened()
+    controller.setSelection({ min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 0, z: 0 } })
+    expect(controller.state.selection).not.toBeNull()
+    // The programmatic update's own 'selection' event is not followed by a
+    // same-tick 'click', unlike a box-completing pointer click, so by the
+    // time any later click actually happens the flag must already be clear.
+    await Promise.resolve()
+    const hit = { regionId: 0, regionName: 'r', local: { x: 0, y: 0, z: 0 }, world: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 }, state: 'minecraft:stone', distance: 1 }
+    renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
+    expect(controller.state.picked).toEqual({ state: hit.state, seq: 1 })
+    expect(controller.state.tab).toBe('replace')
+  })
+
   it('keeps the clamped layer range the renderer reports', async () => {
     const { controller, renderer } = await opened()
     controller.setLayerRange({ minY: -5, maxY: 3 })
