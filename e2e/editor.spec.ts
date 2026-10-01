@@ -35,7 +35,7 @@ test.afterEach(() => {
 
 /** Waits until every chunk is meshed: "N blocks · C/C chunks" with nothing queued. */
 async function waitForRender(page: Page): Promise<void> {
-  await expect(page.getByTestId('stats')).toHaveText(/^[\d,]+ blocks · (\d+)\/\1 chunks$/, { timeout: 30_000 })
+  await expect(page.getByTestId('stats')).toHaveText(/^[\d,]+ blocks · ([1-9]\d*)\/\1 chunks$/, { timeout: 30_000 })
 }
 
 test('opens the bundled sample from the empty state and draws it', async ({ page }) => {
