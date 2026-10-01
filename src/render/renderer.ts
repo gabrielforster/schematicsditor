@@ -60,6 +60,10 @@ const CLICK_SLOP = 4
  * The rendering API Plan 4's UI drives (spec §8): owns the viewport, the
  * mesh worker pool, chunk meshes, layer view, highlight, picking and box
  * selection. It reads the schematic and never mutates it.
+ *
+ * `dispose()` is idempotent and drops every listener. After it, setters and
+ * actions are no-ops, `pickAt` returns null, `on` returns a no-op
+ * unsubscribe, and getters keep returning the last state.
  */
 export class SchematicRenderer {
   private readonly viewport: Viewport
@@ -79,7 +83,9 @@ export class SchematicRenderer {
   private pointerMoved = false
   private pressedAt: { x: number; y: number } | null = null
   private hover: PickHit | null = null
+  private highlightNames: readonly string[] | null = null
   private lastStatus = ''
+  private disposed = false
 
   constructor(container: HTMLElement, options: RendererOptions = {}) {
     this.viewport = new Viewport(container)
@@ -92,13 +98,17 @@ export class SchematicRenderer {
     const load = options.loadAssets ??
       (async (dataVersion: number) => loadTexturedAssets(dataVersion, cachedFetcher(await openAssetCache()), decodeImage))
     this.modes = new ModeController(load, (loaded) => {
+      if (this.disposed) return
       this.pool.setAssets(loaded.assets)
       this.materials.setAtlas(atlasTexture(loaded.atlas))
+      // Colored chunks meshed from the bundled palette pick up the assets' block colors.
+      if (this.modes.effectiveMode === 'colored') this.chunks.remeshAll()
     }, () => {
+      if (this.disposed) return
       this.chunks.setMode(this.modes.effectiveMode)
       this.emitStatus()
     })
-    this.viewport.onFrame = () => this.frame()
+    this.viewport.onFrame = (_seconds, cameraMoved) => this.frame(cameraMoved)
     const canvas = this.viewport.canvas
     canvas.addEventListener('pointermove', this.onPointerMove)
     canvas.addEventListener('pointerleave', this.onPointerLeave)
@@ -118,22 +128,31 @@ export class SchematicRenderer {
 
   /** Shows a schematic. `changes` (the Plan 2 Editor) drives incremental remeshing. */
   load(schematic: Schematic, changes?: ChangeSource): void {
+    if (this.disposed) return
     this.unload()
     this.schematic = schematic
     this.chunkView.setSchematic(schematic)
     this.chunks.setSchematic(schematic)
-    this.unsubscribe = changes?.subscribe((c) => this.chunks.applyChanges(c)) ?? null
+    this.viewport.clipBounds = schematicBounds(schematic)
+    this.unsubscribe = changes?.subscribe((c) => {
+      this.chunks.applyChanges(c)
+      this.pointerMoved = true // the block under the pointer may have changed
+    }) ?? null
     this.modes.setDataVersion(schematic.dataVersion)
     this.fitToView()
     this.emitStatus()
   }
 
   unload(): void {
+    if (this.disposed) return
     this.unsubscribe?.()
     this.unsubscribe = null
     this.schematic = null
+    this.viewport.clipBounds = null
     this.layers = null
+    this.highlightNames = null
     this.hidden.clear()
+    const hadSelection = this.selectionTool.box !== null
     this.selectionTool.set(null)
     this.selectionTool.cancel()
     this.overlays.setSelection(null)
@@ -144,18 +163,22 @@ export class SchematicRenderer {
     this.chunks.setHighlight(null)
     this.chunkView.setSchematic(null)
     this.modes.setDataVersion(null)
+    if (hadSelection) this.emit('selection', null)
   }
 
   setMode(mode: RenderMode): void {
+    if (this.disposed) return
     this.modes.setMode(mode)
   }
 
   /** After an asset failure (spec §12): back to textured and fetch again. */
   retryAssets(): void {
+    if (this.disposed) return
     this.modes.retry()
   }
 
   setRegionVisible(regionId: number, visible: boolean): void {
+    if (this.disposed) return
     if (visible) this.hidden.delete(regionId)
     else this.hidden.add(regionId)
     this.chunkView.setRegionVisible(regionId, visible)
@@ -169,6 +192,7 @@ export class SchematicRenderer {
 
   /** Visible layers in schematic Y (spec §8.5); null shows all. minY === maxY is single-layer mode with a ghost layer below. */
   setLayerRange(range: LayerRange | null): void {
+    if (this.disposed) return
     const bounds = this.schematic && schematicYBounds(this.schematic)
     this.layers = range && bounds ? clampLayerRange(range, bounds) : null
     this.chunks.setLayerRange(this.layers)
@@ -181,6 +205,7 @@ export class SchematicRenderer {
 
   /** ↑/↓: moves the visible range by `delta` layers (starting from the top layer when no range is set). */
   stepLayer(delta: number): void {
+    if (this.disposed) return
     const bounds = this.schematic && schematicYBounds(this.schematic)
     if (!bounds) return
     const from = this.layers ?? { minY: bounds.maxY, maxY: bounds.maxY }
@@ -189,21 +214,31 @@ export class SchematicRenderer {
 
   /** Highlights blocks with these names (`minecraft:stone`) and fades the rest; null clears (spec §8.6). */
   setHighlight(blockNames: readonly string[] | null): void {
+    if (this.disposed) return
+    this.highlightNames = blockNames ? [...blockNames] : null
     this.chunks.setHighlight(blockNames)
+  }
+
+  /** The highlighted block names, or null when nothing is highlighted. */
+  get highlight(): readonly string[] | null {
+    return this.highlightNames
   }
 
   /** Starts two-click box selection: the next two clicked blocks are the corners. */
   startBoxSelection(): void {
+    if (this.disposed) return
     this.selectionTool.start()
   }
 
   cancelBoxSelection(): void {
+    if (this.disposed) return
     this.selectionTool.cancel()
     this.overlays.setCorner(null)
   }
 
   /** Numeric min/max API (inclusive, schematic coordinates); null clears. */
   setSelection(box: Box | null): void {
+    if (this.disposed) return
     this.selectionTool.set(box)
     this.overlays.setSelection(this.selectionTool.box)
     this.emit('selection', this.selectionTool.box)
@@ -218,10 +253,12 @@ export class SchematicRenderer {
   }
 
   fitToView(): void {
+    if (this.disposed) return
     if (this.schematic) this.viewport.fit(schematicBounds(this.schematic, this.hidden))
   }
 
   setFlyMode(on: boolean): void {
+    if (this.disposed) return
     this.viewport.setFlyMode(on)
   }
 
@@ -231,18 +268,23 @@ export class SchematicRenderer {
 
   /** The block under a page point, honoring hidden regions and the layer range. */
   pickAt(clientX: number, clientY: number): PickHit | null {
-    if (!this.schematic) return null
+    if (this.disposed || !this.schematic) return null
     return pickBlock(this.schematic, this.viewport.ray(clientX, clientY), { hidden: this.hidden, layers: this.layers })
   }
 
   on<K extends keyof RendererEvents>(event: K, listener: (value: RendererEvents[K]) => void): () => void {
+    if (this.disposed) return () => false
     const set = this.listeners[event] as Set<(value: RendererEvents[K]) => void>
     set.add(listener)
     return () => set.delete(listener)
   }
 
+  /** Frees the GPU, workers and listeners. Safe to call twice. */
   dispose(): void {
+    if (this.disposed) return
     this.unload()
+    this.disposed = true
+    for (const set of Object.values(this.listeners)) set.clear()
     const canvas = this.viewport.canvas
     canvas.removeEventListener('pointermove', this.onPointerMove)
     canvas.removeEventListener('pointerleave', this.onPointerLeave)
@@ -254,8 +296,9 @@ export class SchematicRenderer {
     this.viewport.dispose()
   }
 
-  private frame(): void {
+  private frame(cameraMoved: boolean): void {
     this.chunks.pump(this.viewport.cameraPosition())
+    if (cameraMoved) this.pointerMoved = true // a still pointer now points at another block
     if (this.pointer && this.pointerMoved) {
       this.pointerMoved = false
       this.setHover(this.pickAt(this.pointer.x, this.pointer.y))

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cachedFetcher, type CacheLike } from '../../../src/render/assets/cache'
 import { assetUrls, AssetLoadError, loadTexturedAssets, VERSIONS_URL } from '../../../src/render/assets/loader'
 import { testAtlas } from '../../helpers/assets'
@@ -66,7 +66,18 @@ describe('cachedFetcher', () => {
     const f = cachedFetcher(null, fakeNetwork({}).fetchFn)
     await expect(f.get('nope', true)).rejects.toThrow('404')
   })
+
+  it('warns when the cache refuses a response and still returns it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const full: CacheLike = { match: async () => undefined, put: async () => { throw new Error('QuotaExceededError') } }
+    const res = await cachedFetcher(full, fakeNetwork({ a: 'body' }).fetchFn).get('a', true)
+    expect(await res.text()).toBe('body')
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0]![0])).toContain('a')
+  })
 })
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('loadTexturedAssets', () => {
   it('loads the version matching the data version', async () => {

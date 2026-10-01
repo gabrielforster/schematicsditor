@@ -28,7 +28,7 @@ export function cachedFetcher(cache: CacheLike | null, fetchFn: (url: string) =>
   const network = async (url: string): Promise<Response> => {
     const res = await fetchFn(url)
     if (!res.ok) throw new Error(`GET ${url}: ${res.status} ${res.statusText}`)
-    await cache?.put(url, res.clone()).catch(() => undefined)
+    await cache?.put(url, res.clone()).catch((e: unknown) => console.warn(`Caching ${url} failed`, e))
     return res
   }
   return {
