@@ -28,6 +28,7 @@ class FakeView implements ChunkView {
   }
   clear() {
     this.shown.clear()
+    this.failed.clear()
     this.log.push('clear')
   }
 }
@@ -96,7 +97,7 @@ describe('ChunkManager', () => {
     expect(manager.stats.meshing).toBe(2)
   })
 
-  it('skips the workers for chunks with nothing visible', async () => {
+  it('skips the workers for chunks with nothing visible', () => {
     const { view, mesher, manager } = setup()
     manager.setSchematic(makeSchematic([{ size: [16, 16, 16], palette: ['minecraft:air'] }]))
     manager.pump(origin)
@@ -143,6 +144,36 @@ describe('ChunkManager', () => {
     await Promise.resolve()
     expect(view.shown.size).toBe(0)
     expect(await drain(manager, mesher, view)).toEqual(['0/0,0,0/main'])
+  })
+
+  it('replacing the schematic while a job is in flight drops the old result (success)', async () => {
+    const { view, mesher, manager } = setup()
+    manager.setSchematic(stoneSchematic([16, 16, 16]))
+    manager.pump(origin)
+    const stale = mesher.calls.shift()!
+    manager.setSchematic(makeSchematic([{ size: [16, 16, 16], palette: ['minecraft:air'] }]))
+    manager.pump(origin)
+    expect(view.log).toContain('delete 0/0,0,0/main')
+    stale.resolve(MESHES)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(view.shown.size).toBe(0)
+  })
+
+  it('replacing the schematic while a job is in flight drops the old result (failure)', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { view, mesher, manager } = setup()
+    manager.setSchematic(stoneSchematic([16, 16, 16]))
+    manager.pump(origin)
+    const stale = mesher.calls.shift()!
+    manager.setSchematic(makeSchematic([{ size: [16, 16, 16], palette: ['minecraft:air'] }]))
+    manager.pump(origin)
+    stale.reject(new Error('stale failure'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(view.failed.has('0/0,0,0/main')).toBe(false)
+    expect(manager.stats.failed).toBe(0)
+    expect(error).not.toHaveBeenCalled()
   })
 
   it('marks failed chunks and keeps rendering the rest', async () => {
@@ -204,6 +235,13 @@ describe('ChunkManager', () => {
       await drain(manager, mesher, view)
       manager.applyChanges([{ regionId: 0, dirtyChunks: [{ cx: 0, cy: 1, cz: 0 }] }])
       expect((await drain(manager, mesher, view)).sort()).toEqual(['0/0,1,0/ghost', '0/0,1,0/main'])
+    })
+
+    it('counts only main-pass chunks in stats.queued, even with a ghost pass pending', () => {
+      const { manager } = setup()
+      manager.setSchematic(stoneSchematic([16, 16, 16]))
+      manager.setLayerRange({ minY: 5, maxY: 5 })
+      expect(manager.stats).toMatchObject({ total: 1, queued: 1 })
     })
   })
 

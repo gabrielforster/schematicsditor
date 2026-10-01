@@ -63,8 +63,9 @@ export class ChunkManager {
   constructor(private readonly view: ChunkView, private readonly mesher: Mesher) {}
 
   get stats(): ChunkStats {
-    let queued = this.parked.size
-    queued += this.scheduler.pendingCount
+    let queued = 0
+    for (const p of this.parked.values()) if (p.pass === 'main') queued++
+    queued += this.scheduler.pendingCountWhere((p) => p.pass === 'main')
     return { total: this.total, queued, meshing: this.meshing, failed: this.failed.size }
   }
 
@@ -176,6 +177,7 @@ export class ChunkManager {
       if (!region) continue
       const range = pass === 'main' ? this.layers : ghostLayer(this.layers)
       if (pass === 'ghost' && !range) {
+        this.failed.delete(key)
         this.view.delete(key)
         continue
       }
@@ -193,8 +195,14 @@ export class ChunkManager {
         (meshes) => {
           this.meshing--
           if (!this.scheduler.isCurrent(key, version)) return
-          this.failed.delete(key)
-          this.view.set(key, regionId, coord, pass, meshes)
+          try {
+            this.failed.delete(key)
+            this.view.set(key, regionId, coord, pass, meshes)
+          } catch (error) {
+            console.error(`Showing chunk ${key} failed`, error)
+            this.failed.add(key)
+            this.view.fail(key, regionId, coord, pass)
+          }
         },
         (error: unknown) => {
           this.meshing--

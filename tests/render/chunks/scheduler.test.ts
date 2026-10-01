@@ -64,6 +64,18 @@ describe('ChunkScheduler', () => {
     expect(s.take(at(0))!.key).toBe('mid')
   })
 
+  it('never reuses a version after a chunk is removed and later invalidated again', () => {
+    const s = new ChunkScheduler<string>()
+    s.invalidate('a', at(1), 'first')
+    const job = s.take(at(0))! // takes 'a' while it is in flight
+    s.remove('a') // the in-flight job's result should become stale
+    s.invalidate('a', at(1), 'second') // re-created entry must not reuse job.version
+    expect(s.isCurrent(job.key, job.version)).toBe(false)
+    const again = s.take(at(0))!
+    expect(s.isCurrent(again.key, again.version)).toBe(true)
+    expect(again.version).not.toBe(job.version)
+  })
+
   it('clears everything', () => {
     const s = filled()
     s.clear()
