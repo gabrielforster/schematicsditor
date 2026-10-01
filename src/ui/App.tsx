@@ -1,6 +1,7 @@
 import type { AppController } from './app/controller'
 import { ConfirmDialog, ErrorDialog } from './components/Dialogs'
 import { EmptyState, type SampleSlot } from './components/EmptyState'
+import { LeftPanel } from './components/LeftPanel'
 import { Notices } from './components/Notices'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
@@ -32,6 +33,7 @@ function Shell({ sample }: { sample?: SampleSlot | undefined }) {
       <TopBar />
       <Notices />
       <main className="workspace">
+        <LeftPanel />
         <section className="center">
           <Viewport />
           {!doc && <EmptyState sample={sample} />}
