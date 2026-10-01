@@ -1,6 +1,12 @@
 // Public rendering API for the UI (Plan 4).
 export { SchematicRenderer, type ChangeSource, type RenderStatus, type RendererEvents, type RendererOptions } from './renderer'
 export type { AssetStatus } from './modes'
+export type { LoadedAssets } from './assets/loader'
+export type { VersionChoice, McVersion } from './assets/versions'
+export type { TexturedAssets } from './assets/resources'
+export type { AtlasImage } from './assets/atlas'
+export type { WorkerLike } from './workers/pool'
+export type { MeshRequest, MeshResponse } from './workers/protocol'
 export type { LayerRange } from './chunks/layers'
 export type { ChunkStats } from './chunks/manager'
 export type { PickHit } from './pick/pick'
