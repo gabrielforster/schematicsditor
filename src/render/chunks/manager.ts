@@ -28,12 +28,21 @@ export interface Mesher {
 export interface ChunkStats {
   /** Chunks of the main pass. */
   total: number
-  /** Main-pass chunks waiting to be meshed. */
+  /** Main-pass chunks waiting to be meshed (not counting `parked`). */
   queued: number
+  /** Main-pass chunks of hidden regions, meshed once their region is shown again. */
+  parked: number
   /** Jobs running in workers (both passes). */
   meshing: number
   /** Chunks whose last job failed (both passes). */
   failed: number
+}
+
+export interface ChunkManagerOptions {
+  /** Milliseconds clock for the per-pump budget; defaults to `performance.now`. */
+  now?: () => number
+  /** Milliseconds one `pump` may spend taking chunks (at least one is always taken). Default 6. */
+  budgetMs?: number
 }
 
 interface Payload {
@@ -60,13 +69,19 @@ export class ChunkManager {
   private meshing = 0
   private total = 0
 
-  constructor(private readonly view: ChunkView, private readonly mesher: Mesher) {}
+  private readonly now: () => number
+  private readonly budgetMs: number
+
+  constructor(private readonly view: ChunkView, private readonly mesher: Mesher, options: ChunkManagerOptions = {}) {
+    this.now = options.now ?? (() => performance.now())
+    this.budgetMs = options.budgetMs ?? 6
+  }
 
   get stats(): ChunkStats {
-    let queued = 0
-    for (const p of this.parked.values()) if (p.pass === 'main') queued++
-    queued += this.scheduler.pendingCountWhere((p) => p.pass === 'main')
-    return { total: this.total, queued, meshing: this.meshing, failed: this.failed.size }
+    let parked = 0
+    for (const p of this.parked.values()) if (p.pass === 'main') parked++
+    const queued = this.scheduler.pendingCountWhere((p) => p.pass === 'main')
+    return { total: this.total, queued, parked, meshing: this.meshing, failed: this.failed.size }
   }
 
   setSchematic(schematic: Schematic | null): void {
@@ -88,6 +103,11 @@ export class ChunkManager {
   setMode(mode: RenderMode): void {
     if (mode === this.mode) return
     this.mode = mode
+    this.invalidateAll()
+  }
+
+  /** Remeshes every chunk in the current mode (e.g. colored chunks after textured assets bring new block colors). */
+  remeshAll(): void {
     this.invalidateAll()
   }
 
@@ -163,12 +183,18 @@ export class ChunkManager {
     }
   }
 
-  /** Starts jobs for the chunks nearest to `camera` (world coordinates) while workers have room. */
+  /**
+   * Starts jobs for the chunks nearest to `camera` (world coordinates) while
+   * workers have room and the frame budget lasts (empty chunks never reach
+   * the workers, so the budget is what bounds them).
+   */
   pump(camera: Vec3): void {
     const s = this.schematic
     if (!s) return
     const capacity = this.mesher.size * 2
-    while (this.meshing < capacity) {
+    const start = this.now()
+    for (let taken = 0; this.meshing < capacity; taken++) {
+      if (taken > 0 && this.now() - start >= this.budgetMs) return
       const next = this.scheduler.take(camera)
       if (!next) return
       const { key, version, payload } = next

@@ -19,8 +19,8 @@ export interface ExtractOptions {
 /**
  * Copies one chunk plus its 1-block border out of the live region (spec §6).
  * Reads `region.palette` and `region.blocks` at call time, as Plan 2's
- * mutation contract requires. Returns null when no visible non-air block
- * lies inside the chunk, so callers can skip the worker.
+ * mutation contract requires. Returns null when no non-air block within
+ * the Y range lies inside the chunk, so callers can skip the worker.
  */
 export function extractChunk(region: Region, coord: ChunkCoord, options: ExtractOptions = {}): ChunkSlice | null {
   const { palette, blocks, size: rs } = region

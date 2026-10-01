@@ -13,13 +13,37 @@ describe('chunksForChange', () => {
     expect(chunksForChange(region, { regionId: 0, dirtyChunks: [{ cx: 2, cy: 0, cz: 0 }] })).toEqual([{ cx: 2, cy: 0, cz: 0 }])
   })
 
-  it('finds the chunks holding changed palette slots', () => {
-    expect(chunksForChange(region, { regionId: 0, paletteChange: { slots: [1] } })).toEqual([{ cx: 0, cy: 0, cz: 0 }])
+  it('finds the chunks holding changed palette slots, plus their face neighbours', () => {
+    expect(chunksForChange(region, { regionId: 0, paletteChange: { slots: [1] } })).toEqual([
+      { cx: 0, cy: 0, cz: 0 }, { cx: 1, cy: 0, cz: 0 },
+    ])
+  })
+
+  it('marks a chunk with a change in its interior and every in-bounds face neighbour', () => {
+    // 48 × 48 × 48: 3 × 3 × 3 chunks. Slot 1 only in the interior of the centre chunk (1, 1, 1).
+    const n = 48
+    const cube = new Array<number>(n * n * n).fill(0)
+    cube[24 * n * n + 24 * n + 24] = 1
+    const big = makeRegion({ size: [n, n, n], palette: ['minecraft:air', 'minecraft:stone'], blocks: cube })
+    expect(chunksForChange(big, { regionId: 0, paletteChange: { slots: [1] } })).toEqual([
+      { cx: 1, cy: 0, cz: 1 },
+      { cx: 1, cy: 1, cz: 0 },
+      { cx: 0, cy: 1, cz: 1 }, { cx: 1, cy: 1, cz: 1 }, { cx: 2, cy: 1, cz: 1 },
+      { cx: 1, cy: 1, cz: 2 },
+      { cx: 1, cy: 2, cz: 1 },
+    ])
+    // A corner chunk: only its in-bounds neighbours.
+    cube.fill(0)
+    cube[2 * n * n + 2 * n + 2] = 1
+    const corner = makeRegion({ size: [n, n, n], palette: ['minecraft:air', 'minecraft:stone'], blocks: cube })
+    expect(chunksForChange(corner, { regionId: 0, paletteChange: { slots: [1] } })).toEqual([
+      { cx: 0, cy: 0, cz: 0 }, { cx: 1, cy: 0, cz: 0 }, { cx: 0, cy: 0, cz: 1 }, { cx: 0, cy: 1, cz: 0 },
+    ])
   })
 
   it('includes neighbours whose border holds a changed slot', () => {
     expect(chunksForChange(region, { regionId: 0, paletteChange: { slots: [2] } })).toEqual([
-      { cx: 0, cy: 0, cz: 0 }, { cx: 1, cy: 0, cz: 0 },
+      { cx: 0, cy: 0, cz: 0 }, { cx: 1, cy: 0, cz: 0 }, { cx: 2, cy: 0, cz: 0 },
     ])
   })
 
