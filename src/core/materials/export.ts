@@ -1,8 +1,14 @@
 import type { MaterialList } from './materials'
 import { SHULKER_SLOTS } from './materials'
 
+// A leading =, +, -, @, tab or CR would launch a formula in spreadsheet
+// software that opens the CSV (CSV/formula injection); prefix it with a
+// single quote so the cell stays literal text.
+const FORMULA_INJECTION_START = /^[=+\-@\t\r]/
+
 function csvField(value: string | number): string {
-  const s = String(value)
+  const raw = String(value)
+  const s = FORMULA_INJECTION_START.test(raw) ? `'${raw}` : raw
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
