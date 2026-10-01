@@ -1,5 +1,6 @@
-// Real .litematic files exported from the game. Drop them into
-// tests/fixtures/ — every file there must survive read → save → read.
+// Round-trip fixtures: the synthetic files from `npm run generate:samples`
+// plus any real .litematic files exported from the game. Every file in
+// tests/fixtures/ must survive read → save → read.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -10,7 +11,12 @@ import { blockStateKey } from '../../../src/core/model'
 const dir = join(import.meta.dirname, '../../fixtures')
 const files = readdirSync(dir).filter((f) => f.endsWith('.litematic'))
 
-describe.skipIf(files.length === 0)('real fixtures', () => {
+describe('round-trip fixtures', () => {
+  it('has fixtures to check', () => {
+    expect(files).toContain('sample-house.litematic')
+    expect(files).toContain('wide-palette.litematic')
+  })
+
   it.each(files)('%s round-trips through save', (file) => {
     const original = readLitematic(readFileSync(join(dir, file)))
     const { bytes, saved } = saveLitematic(original, original.metadata.timeModified)
