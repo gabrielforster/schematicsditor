@@ -1,4 +1,4 @@
-import type { Schematic } from '../model'
+import type { Metadata, Schematic } from '../model'
 import type { BlockRegistry } from '../registry'
 import type { RegionChange } from './events'
 import { DEFAULT_HISTORY_CAP_BYTES, History, makeEntry } from './history'
@@ -9,6 +9,12 @@ import type { Family } from '../families/families'
 import { familySwapRules, previewFamilySwap, type FamilySwapPreview } from '../families/swap'
 
 export type ChangeListener = (changes: RegionChange[]) => void
+
+/** The metadata fields a user may edit. The rest is recomputed on save. */
+export type EditableMetadata = Pick<Metadata, 'name' | 'author' | 'description'>
+
+/** NBT strings hold at most 65,535 bytes of UTF-8; deepslate does not check this when writing. */
+export const MAX_NBT_STRING_BYTES = 65535
 
 export interface EditResult extends ReplacePreview {
   /** False when the edit was too large for the history; it was applied but cannot be undone. */
@@ -69,6 +75,31 @@ export class Editor {
   /** Every shared shape is swapped in one pass and recorded as one history entry. */
   familySwap(source: Family, target: Family, scopes: readonly Scope[]): EditResult {
     return this.replace(familySwapRules(source, target), scopes, `${source.label} → ${target.label}`)
+  }
+
+  /**
+   * Change the name, author or description in place. Not recorded in the
+   * undo history: the history holds block edits (spec §7), and the text
+   * fields that call this have their own undo. Change listeners are not
+   * notified, since no region changed. Returns true when a value changed.
+   * Throws RangeError, changing nothing, when a value is too long for NBT.
+   */
+  setMetadata(patch: Partial<EditableMetadata>): boolean {
+    const encoder = new TextEncoder()
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== undefined && encoder.encode(value).length > MAX_NBT_STRING_BYTES) {
+        throw new RangeError(`${key} is longer than ${MAX_NBT_STRING_BYTES} bytes`)
+      }
+    }
+    let changed = false
+    for (const key of ['name', 'author', 'description'] as const) {
+      const value = patch[key]
+      if (value !== undefined && value !== this.schematic.metadata[key]) {
+        this.schematic.metadata[key] = value
+        changed = true
+      }
+    }
+    return changed
   }
 
   undo(): boolean {
