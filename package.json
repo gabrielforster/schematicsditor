@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "generate:registry": "node scripts/generate-registry.mjs",
     "generate:palette": "tsx scripts/generate-palette.ts",
-    "generate:samples": "tsx scripts/generate-samples.ts"
+    "generate:samples": "tsx scripts/generate-samples.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "deepslate": "^0.27.2",
@@ -19,6 +20,7 @@
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.3",
