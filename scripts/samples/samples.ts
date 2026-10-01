@@ -56,7 +56,7 @@ export function buildSampleHouse(registry: BlockRegistry = bundledRegistry()): S
   house.set(3, 1, 0, 'oak_door[facing=south,half=lower,hinge=left]')
   house.set(3, 2, 0, 'oak_door[facing=south,half=upper,hinge=left]')
   for (const [x, z] of [[1, 0], [5, 0], [0, 3], [6, 3], [3, 6]] as const) house.set(x, 2, z, 'glass')
-  house.set(1, 1, 5, 'chest[facing=south]')
+  house.set(1, 1, 5, 'chest[facing=north]')
   house.tileEntity(1, 1, 5, new NbtCompound()
     .set('id', new NbtString('minecraft:chest'))
     .set('Items', new NbtList([item(0, 'minecraft:torch', 16), item(1, 'minecraft:bread', 8), item(13, 'minecraft:oak_sapling', 3)])))
@@ -72,7 +72,11 @@ export function buildSampleHouse(registry: BlockRegistry = bundledRegistry()): S
   const garden = new RegionBuilder('Garden', { x: 7, y: 0, z: 0 }, { x: 4, y: 2, z: 7 }, registry)
   garden.fill(0, 0, 0, 3, 0, 6, 'grass_block')
   garden.set(1, 0, 3, 'water[level=0]')
-  garden.fill(3, 1, 0, 3, 1, 6, 'oak_fence')
+  // Fence posts run along z (0..6); connect each to its in-line neighbors so
+  // they render as a joined fence rather than loose posts.
+  for (let z = 0; z <= 6; z++) {
+    garden.set(3, 1, z, `oak_fence[north=${z > 0},south=${z < 6}]`)
+  }
   garden.set(1, 1, 1, 'poppy').set(2, 1, 1, 'dandelion').set(0, 1, 5, 'oxeye_daisy')
   // Entity Pos is relative to the raw file Position (10,0,6), not the min corner:
   // local block (2,1,5) is world (9,1,5), so its centre is (9.5-10, 1, 5.5-6).
