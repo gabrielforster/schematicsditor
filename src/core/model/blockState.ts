@@ -18,18 +18,32 @@ export function blockStateKey(state: BlockState): string {
   return `${state.name}[${keys.map((k) => `${k}=${state.properties[k]}`).join(',')}]`
 }
 
+// Resource location (`namespace:path` or bare `path`) and property syntax, as
+// Minecraft accepts them. User input from the block picker reaches this parser.
+const NAME = /^(?:[a-z0-9_.-]+:)?[a-z0-9_./-]+$/
+const PROPERTY = /^[a-z0-9_]+$/
+
+/**
+ * Parse `name` or `name[k=v,...]`. Throws SyntaxError on anything else,
+ * including stray brackets, empty keys or values, and duplicate keys.
+ */
 export function parseBlockStateKey(key: string): BlockState {
+  const invalid = () => new SyntaxError(`invalid block state: ${key}`)
   const open = key.indexOf('[')
-  if (open === -1) return { name: key, properties: {} }
-  if (!key.endsWith(']')) throw new SyntaxError(`invalid block state: ${key}`)
+  const name = open === -1 ? key : key.slice(0, open)
+  if (!NAME.test(name)) throw invalid()
   const properties: Record<string, string> = {}
+  if (open === -1) return { name, properties }
+  if (!key.endsWith(']')) throw invalid()
   const body = key.slice(open + 1, -1)
   if (body.length > 0) {
     for (const pair of body.split(',')) {
       const eq = pair.indexOf('=')
-      if (eq <= 0) throw new SyntaxError(`invalid block state: ${key}`)
-      properties[pair.slice(0, eq)] = pair.slice(eq + 1)
+      const k = pair.slice(0, eq)
+      const v = pair.slice(eq + 1)
+      if (eq === -1 || !PROPERTY.test(k) || !PROPERTY.test(v) || Object.hasOwn(properties, k)) throw invalid()
+      properties[k] = v
     }
   }
-  return { name: key.slice(0, open), properties }
+  return { name, properties }
 }
