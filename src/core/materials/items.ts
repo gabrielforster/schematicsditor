@@ -68,6 +68,15 @@ const FLUID_BUCKETS: Readonly<Record<string, string>> = {
 /** Properties whose value is the number of items in the block (4 candles, 3 sea pickles, ...). */
 const COUNT_PROPERTIES = ['candles', 'pickles', 'eggs', 'layers', 'flower_amount', 'segment_amount'] as const
 
+/** Blocks covering up to six faces; one item per face set to `true` (minimum 1). */
+const MULTIFACE_BLOCKS: ReadonlySet<string> = new Set([
+  'minecraft:glow_lichen',
+  'minecraft:sculk_vein',
+  'minecraft:resin_clump',
+  'minecraft:vine',
+])
+const FACE_PROPERTIES = ['north', 'south', 'east', 'west', 'up', 'down'] as const
+
 /** Items that stack to 16. */
 export const STACK_16_ITEMS: ReadonlySet<string> = new Set([
   'minecraft:armor_stand',
@@ -129,9 +138,13 @@ export function itemsForState(state: BlockState): ItemCount[] | null {
 
   const items = baseItems(name)
   let multiplier = properties.type === 'double' ? 2 : 1
-  for (const prop of COUNT_PROPERTIES) {
-    const value = properties[prop]
-    if (value !== undefined) multiplier = Math.max(1, Number.parseInt(value, 10) || 1)
+  if (MULTIFACE_BLOCKS.has(name)) {
+    multiplier = Math.max(1, FACE_PROPERTIES.filter((face) => properties[face] === 'true').length)
+  } else {
+    for (const prop of COUNT_PROPERTIES) {
+      const value = properties[prop]
+      if (value !== undefined) multiplier = Math.max(1, Number.parseInt(value, 10) || 1)
+    }
   }
   items[items.length - 1]!.count *= multiplier
   return items

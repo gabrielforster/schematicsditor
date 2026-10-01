@@ -54,6 +54,17 @@ describe('itemsForState', () => {
     expect(items('minecraft:pink_petals[facing=north,flower_amount=2]')).toEqual([{ item: 'minecraft:pink_petals', count: 2 }])
   })
 
+  it('counts multiface blocks by the number of faces set to true, minimum 1', () => {
+    expect(items('minecraft:glow_lichen[down=false,east=true,north=true,south=false,up=false,waterlogged=false,west=false]'))
+      .toEqual([{ item: 'minecraft:glow_lichen', count: 2 }])
+    expect(items('minecraft:sculk_vein[down=false,east=false,north=false,south=false,up=false,waterlogged=false,west=false]'))
+      .toEqual([{ item: 'minecraft:sculk_vein', count: 1 }])
+    expect(items('minecraft:resin_clump[down=true,east=true,north=true,south=true,up=true,waterlogged=false,west=true]'))
+      .toEqual([{ item: 'minecraft:resin_clump', count: 6 }])
+    expect(items('minecraft:vine[east=true,north=false,south=true,up=false,west=false]'))
+      .toEqual([{ item: 'minecraft:vine', count: 2 }])
+  })
+
   it('splits potted plants and candle cakes into their items', () => {
     expect(items('minecraft:potted_poppy')).toEqual([{ item: 'minecraft:flower_pot', count: 1 }, { item: 'minecraft:poppy', count: 1 }])
     expect(items('minecraft:potted_azalea_bush')).toEqual([{ item: 'minecraft:flower_pot', count: 1 }, { item: 'minecraft:azalea', count: 1 }])

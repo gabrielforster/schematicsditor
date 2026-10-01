@@ -122,6 +122,11 @@ describe('export', () => {
     expect(csv.split('\r\n')[1]).toBe('"mod:a,""b""",1,1,1,unknown')
   })
 
+  it('prefixes formula-injection characters in an unknown block name with a single quote', () => {
+    const csv = materialsToCsv({ rows: [{ item: '=cmd|x', count: 1, stackSize: 64, stacks: 1, shulkerBoxes: 1, blocks: [], unknown: true }], itemless: [] })
+    expect(csv.split('\r\n')[1]).toBe("'=cmd|x,1,1,1,unknown")
+  })
+
   it('writes text with stack breakdowns and an itemless section', () => {
     const text = materialsToText({
       rows: [
