@@ -112,6 +112,48 @@ describe('AppController.openFile', () => {
     expect(controller.state.doc?.schematic).toBe(second)
   })
 
+  it('clears busy once an earlier open finishes, even though a later open declined its own confirm first', async () => {
+    const first = deferred<ReturnType<typeof sample>>()
+    const { controller } = setup({ largeFileBytes: 1000 }, fakeServices({ parse: () => first.promise }))
+    const jobA = controller.openFile(fakeFile('a.litematic', 10))
+    await Promise.resolve()
+    expect(controller.state.busy).toEqual({ kind: 'open', label: 'Opening a.litematic…' })
+    const jobB = controller.openFile(fakeFile('huge.litematic', 5 * 1024 * 1024))
+    await Promise.resolve()
+    expect(controller.state.confirm).toMatchObject({ title: 'Very large file' })
+    controller.answerConfirm(false)
+    await jobB
+    // B never reached its own busy-setting step (its confirm was declined first),
+    // so A's busy is still correctly shown: A really is still in flight.
+    expect(controller.state.busy).toEqual({ kind: 'open', label: 'Opening a.litematic…' })
+    first.resolve(sample())
+    await jobA
+    // A's own completion must still clear the busy it set, even though B's
+    // token now makes A the stale one (so A does not get to show its doc).
+    expect(controller.state.busy).toBeNull()
+    expect(controller.state.doc).toBeNull()
+  })
+
+  it('clears busy cleanly when a later opens volume confirm is declined', async () => {
+    const first = deferred<ReturnType<typeof sample>>()
+    const parses = [() => first.promise, async () => sample()]
+    const { controller } = setup({ largeVolume: 1 }, fakeServices({ parse: () => parses.shift()!() }))
+    const jobA = controller.openFile(fakeFile('a.litematic'))
+    expect(controller.state.busy).toEqual({ kind: 'open', label: 'Opening a.litematic…' })
+    const jobB = controller.openFile(fakeFile('b.litematic'))
+    await new Promise((r) => setTimeout(r, 0))
+    expect(controller.state.confirm).toMatchObject({ title: 'Very large schematic' })
+    expect(controller.state.busy).toBeNull()
+    controller.answerConfirm(false)
+    await jobB
+    expect(controller.state.busy).toBeNull()
+    expect(controller.state.doc).toBeNull()
+    first.resolve(sample())
+    await jobA
+    expect(controller.state.busy).toBeNull()
+    expect(controller.state.doc).toBeNull()
+  })
+
   it('resets view state for the new schematic', async () => {
     const { controller } = await opened()
     controller.setRegionVisible(0, false)
@@ -147,6 +189,27 @@ describe('AppController.save', () => {
     expect(services.downloads).toEqual([])
     expect(controller.state.doc).toBe(doc)
     expect(controller.state.error).toMatchObject({ title: 'Save blocked', details: 'region count: 2 ≠ 1' })
+    expect(controller.state.busy).toBeNull()
+  })
+
+  it('does not let an overlapping open and save clear each others busy', async () => {
+    const { controller, services } = await opened()
+    const savePending = deferred<Uint8Array>()
+    services.save = () => savePending.promise
+    // Keeps the overlapping open pending under our control, so the test does
+    // not race the two promise chains against each other.
+    const openPending = deferred<ReturnType<typeof sample>>()
+    services.parse = () => openPending.promise
+    const saveJob = controller.save()
+    expect(controller.state.busy).toEqual({ kind: 'save', label: 'Saving…' })
+    const openJob = controller.openFile(fakeFile('other.litematic'))
+    expect(controller.state.busy).toEqual({ kind: 'open', label: 'Opening other.litematic…' })
+    savePending.resolve(new Uint8Array([9]))
+    await saveJob
+    // The save's completion must not clear the still-in-flight open's busy.
+    expect(controller.state.busy).toEqual({ kind: 'open', label: 'Opening other.litematic…' })
+    openPending.resolve(sample())
+    await openJob
     expect(controller.state.busy).toBeNull()
   })
 
@@ -269,6 +332,26 @@ describe('AppController view state', () => {
     expect(controller.state.picked?.seq).toBe(2)
   })
 
+  it('does not eyedrop an alt+click that was used for box selection', async () => {
+    const { controller, renderer } = await opened()
+    const hit = { regionId: 0, regionName: 'r', local: { x: 0, y: 0, z: 0 }, world: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 }, state: 'minecraft:stone', distance: 1 }
+    // First corner: still selecting, so the alt+click places a corner, not an eyedropper pick.
+    controller.startBoxSelection()
+    renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
+    expect(controller.state.picked).toBeNull()
+    expect(controller.state.selecting).toBe(true)
+    // Second corner: selecting just turned off, but the selection handler consumed this click.
+    renderer.selecting = false
+    const box = { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } }
+    renderer.emit('selection', box)
+    renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
+    expect(controller.state.picked).toBeNull()
+    expect(controller.state.selection).toBe(box)
+    // An ordinary alt+click, uninvolved in selection, still eyedrops.
+    renderer.emit('click', { hit, event: { altKey: true } as MouseEvent })
+    expect(controller.state.picked).toEqual({ state: hit.state, seq: 1 })
+  })
+
   it('keeps the clamped layer range the renderer reports', async () => {
     const { controller, renderer } = await opened()
     controller.setLayerRange({ minY: -5, maxY: 3 })
@@ -315,5 +398,49 @@ describe('AppController view state', () => {
     detach()
     renderer.emit('status', idleStatus({ suggestColored: true }))
     expect(controller.state.render?.suggestColored).toBe(false)
+  })
+
+  it('detaches a previously attached renderer when a new one is attached', async () => {
+    const controller = new AppController(fakeServices())
+    const first = new FakeRenderer()
+    controller.attachRenderer(first)
+    const second = new FakeRenderer()
+    controller.attachRenderer(second)
+    first.emit('status', idleStatus({ suggestColored: true }))
+    expect(controller.state.render?.suggestColored).toBe(false)
+    second.emit('status', idleStatus({ suggestColored: true }))
+    expect(controller.state.render?.suggestColored).toBe(true)
+  })
+})
+
+describe('AppController notices', () => {
+  it('runs the use-colored notice action by switching render mode', async () => {
+    const { controller, renderer } = await opened()
+    controller.runNoticeAction('use-colored')
+    expect(renderer.calls).toContain('setMode:colored')
+  })
+
+  it('runs the retry-assets notice action', async () => {
+    const { controller, renderer } = await opened()
+    controller.runNoticeAction('retry-assets')
+    expect(renderer.calls).toContain('retryAssets')
+  })
+
+  it('retries assets directly on the renderer', async () => {
+    const { controller, renderer } = await opened()
+    controller.retryAssets()
+    expect(renderer.calls).toContain('retryAssets')
+  })
+
+  it('dismisses a notice once, and resets dismissals when a new doc opens', async () => {
+    const { controller } = await opened()
+    controller.dismissNotice('suggest-colored')
+    expect(controller.state.dismissed).toEqual(['suggest-colored'])
+    controller.dismissNotice('suggest-colored')
+    expect(controller.state.dismissed).toEqual(['suggest-colored'])
+    controller.dismissNotice('chunks-failed')
+    expect(controller.state.dismissed).toEqual(['suggest-colored', 'chunks-failed'])
+    await controller.openFile(fakeFile('other.litematic'))
+    expect(controller.state.dismissed).toEqual([])
   })
 })
