@@ -50,7 +50,17 @@ export class AppController {
   /** Owner of the current `busy`; only the setter that owns it may clear it (overlapping opens/saves). */
   private busySeq = 0
   private busyOwner: number | null = null
-  /** Set by the 'selection' listener when a click just completed a box, so the same click's 'selection' doesn't also eyedrop. */
+  /**
+   * Set by the 'selection' listener so a box-completing click's own
+   * 'selection' event doesn't also eyedrop. The real renderer emits
+   * 'selection' then 'click' synchronously within the same pointerup
+   * handler, so this only needs to survive until the very next 'click' in
+   * that same synchronous dispatch; the queued microtask reset (scheduled
+   * alongside it) clears it before any later, unrelated click — including
+   * one that follows a programmatic `setSelection` call (e.g. a numeric
+   * bounds edit), which also emits 'selection' but is not followed by a
+   * same-tick 'click'.
+   */
   private selectionConsumedClick = false
 
   private readonly largeFileBytes: number
@@ -77,8 +87,11 @@ export class AppController {
       renderer.on('status', (render) => this.store.setState({ render })),
       renderer.on('hover', (hover) => this.store.setState({ hover })),
       renderer.on('selection', (selection) => {
-        // The click that just completed this box must not also fire the eyedropper.
+        // The click that just completed this box (if any) must not also fire
+        // the eyedropper; the microtask reset keeps this from leaking past
+        // the current synchronous dispatch into some later, unrelated click.
         this.selectionConsumedClick = true
+        queueMicrotask(() => { this.selectionConsumedClick = false })
         this.store.setState({ selection, selecting: renderer.selecting })
       }),
       renderer.on('click', ({ hit, event }) => {
