@@ -30,6 +30,22 @@ npm run generate:registry -- <version>   # e.g. 26.3; omit for the newest stable
 npm test                                  # family and item-mapping tests flag renamed or new blocks
 ```
 
+## Colored palette
+
+Colored mode draws every block as a cube in its average texture color, from
+`src/render/palette/colors.json`. The file is generated from mcmeta's textures and models
+(same source as the block registry) and works offline. Regenerate it after updating the
+block registry:
+
+```bash
+npm run generate:palette            # the bundled registry's version
+npm run generate:palette -- 1.21.4  # a specific version
+npm test                            # the palette version must match the registry version
+```
+
+Textured mode fetches block models and the texture atlas for the file's Minecraft version
+from mcmeta at runtime and keeps them in the browser's Cache API.
+
 ## Manual in-game check
 
 After changing anything under `src/core/litematic/`:
