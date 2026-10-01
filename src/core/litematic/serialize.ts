@@ -1,6 +1,8 @@
 // Schematics cross worker boundaries via structured clone, which strips class
-// prototypes. NBT tags therefore travel as deepslate JSON; block arrays are
-// transferred without copying.
+// prototypes. NBT tags therefore travel as deepslate JSON. `serializeSchematic`
+// also returns the block array buffers as a transfer list: the parse worker
+// transfers them (no copy), while the save path ignores the list and copies,
+// because the editor keeps using those arrays.
 import { NbtCompound } from 'deepslate/nbt'
 import type { BlockArray } from './bits'
 import type { BlockState, Metadata, Region, Schematic, Vec3 } from '../model'

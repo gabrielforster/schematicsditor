@@ -53,18 +53,39 @@ glass, water, stairs, leaves, a chest and at least one block from a mod:
 
 1. Textured mode: textures appear after a short colored phase; the mod block is a magenta
    cube; water and stained glass are see-through; no gaps or missing faces between chunks.
-2. Colored mode: the same shapes as solid colors; glass and water are translucent.
-3. Layers: set a Y range; cut faces look solid. ↑/↓ moves the range. With **Single** checked,
-   the layer below shows faded.
-4. Highlight `minecraft:stone`: stone stays solid, everything else fades.
-5. **Pick two corners**, click two blocks: a yellow box appears and the min/max fields fill in.
+2. **Colored**: the same shapes as solid colors; glass and water are translucent.
+3. **Layers**: drag **From Y** / **To Y**; cut faces look solid. ↑/↓ moves the range. With
+   **Single layer** checked, the layer below shows faded.
+4. **Materials**: click the stone row; stone stays solid, everything else fades.
+5. **Pick corners**, click two blocks: a yellow box appears and the min/max fields fill in.
    Editing the numbers and clicking **Apply** moves the box.
-6. Hovering shows the block state and coordinates.
-7. Replace `minecraft:stone` → `minecraft:gold_block`: the view updates; **Undo** restores it.
+6. Hovering shows the block state and coordinates next to the pointer.
+7. **Replace** `stone` with `gold_block`: the view updates; **Undo** restores it.
 8. In DevTools, clear site data and go offline, then reload and open the file: the view
-   falls back to colored with **Retry textures**. Go online and click it: textures return.
-   Reload offline again: textures load from the cache.
+   falls back to colored with a **Retry textures** notice. Go online and click it: textures
+   return. Reload offline again: textures load from the cache.
 9. **Fly**: WASD, Space and Shift move the camera.
+
+## Manual UI check
+
+After changing anything under `src/ui/` or `src/workers/`, run `npm run dev`:
+
+1. The empty state explains what to do. Drop a `.litematic` file anywhere: a "Drop to open"
+   overlay appears, then the schematic opens and the stats overlay counts blocks and chunks.
+2. Drop a `.png`: an error explains it is not a Litematica file, **Technical details**
+   expands, and the open schematic stays open.
+3. **Regions**: unchecking a region hides it; block counts match the schematic info in game.
+4. **Materials**: sort by each column, filter, switch the scope to **Visible layers** with a
+   Y range set, **Export CSV** downloads a file, **Copy as text** pastes a list.
+5. **Replace**: add `oak_stairs` and Alt+click a stone block (its state joins "from"), pick
+   `spruce_stairs`, set `half` to `top`, check **Use layer range**: the preview count changes;
+   replacing a chest warns that its contents will be dropped. **Replace**, then Ctrl+Z.
+6. **Family swap**: Oak → Spruce previews a count and lists unmapped shapes; **Swap** works
+   and one Undo reverts it.
+7. Rename the schematic in the top bar and press Ctrl+S: `<new name>.litematic` downloads
+   without freezing the page, and loads back with the new name.
+8. Open a file over 32 MB: a warning asks before reading it. Open one with a region over
+   5 million blocks: a notice suggests colored mode.
 
 ## Manual in-game check
 
