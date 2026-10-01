@@ -20,7 +20,10 @@ const RESORT_DISTANCE = 8
 /**
  * Nearest-first chunk queue (spec §8.4). Every invalidation bumps the
  * chunk's version, so results of jobs started before it can be recognised
- * as stale with `isCurrent`.
+ * as stale with `isCurrent`. Versions are drawn from one counter for the
+ * whole scheduler and never reused, so a chunk that is removed and later
+ * invalidated again (e.g. dropped then re-shown) gets a version no
+ * in-flight job could already hold.
  */
 export class ChunkScheduler<T> {
   private readonly entries = new Map<string, Entry<T>>()
@@ -29,16 +32,24 @@ export class ChunkScheduler<T> {
   private sortedFor: Vec3 | null = null
   private needsSort = false
   private pending = 0
+  private nextVersion = 1
 
   get pendingCount(): number {
     return this.pending
+  }
+
+  /** Count of pending entries whose payload matches `match`. */
+  pendingCountWhere(match: (payload: T) => boolean): number {
+    let n = 0
+    for (const e of this.entries.values()) if (e.pending && match(e.payload)) n++
+    return n
   }
 
   /** Marks a chunk as needing a (re)mesh. `center` is in world coordinates. */
   invalidate(key: string, center: Vec3, payload: T): void {
     const e = this.entries.get(key)
     if (e) {
-      e.version++
+      e.version = this.nextVersion++
       e.payload = payload
       e.center = center
       if (!e.pending) {
@@ -49,7 +60,7 @@ export class ChunkScheduler<T> {
       }
       return
     }
-    const entry: Entry<T> = { key, center, payload, version: 1, pending: true }
+    const entry: Entry<T> = { key, center, payload, version: this.nextVersion++, pending: true }
     this.entries.set(key, entry)
     this.pending++
     this.queue.push(entry)
@@ -62,7 +73,7 @@ export class ChunkScheduler<T> {
     if (!e) return
     if (e.pending) this.pending--
     e.pending = false
-    e.version++
+    e.version = this.nextVersion++
     this.entries.delete(key)
   }
 
