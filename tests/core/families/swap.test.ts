@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { NbtCompound, NbtString } from 'deepslate/nbt'
 import { Editor } from '../../../src/core/edit/editor'
+import * as scopes from '../../../src/core/edit/scopes'
 import { bundledFamilies } from '../../../src/core/families/bundled'
 import { findFamily, type Family } from '../../../src/core/families/families'
 import { familySwapRules, previewFamilySwap } from '../../../src/core/families/swap'
@@ -47,6 +48,22 @@ describe('previewFamilySwap', () => {
 
   it('lists nothing as unmapped when every present shape has a counterpart', () => {
     expect(previewFamilySwap(oakHut(), family('oak'), family('spruce'), [], registry).unmapped).toEqual([])
+  })
+
+  it('scans palette counts once per region no matter how many shapes are unmapped', () => {
+    const s = makeSchematic([{
+      size: [2, 1, 1],
+      palette: ['minecraft:oak_wood[axis=y]', 'minecraft:oak_leaves[distance=7,persistent=true,waterlogged=false]'],
+      blocks: [0, 1],
+    }])
+    const spy = vi.spyOn(scopes, 'paletteCounts')
+    try {
+      const preview = previewFamilySwap(s, family('oak'), family('bamboo'), [], registry)
+      expect(preview.unmapped.map((u) => u.shape).sort()).toEqual(['leaves', 'wood'])
+      expect(spy).toHaveBeenCalledTimes(1)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 
