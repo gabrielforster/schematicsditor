@@ -105,6 +105,32 @@ describe('ChunkManager', () => {
     expect(view.log).toContain('delete 0/0,0,0/main')
   })
 
+  it('stops taking chunks once the frame budget is spent, but always takes one', () => {
+    const view = new FakeView()
+    const mesher = new FakeMesher(1)
+    let t = 0
+    const manager = new ChunkManager(view, mesher, { now: () => t, budgetMs: 6 })
+    // 64 × 16 × 64 of air: 16 empty chunks, none of which reaches the workers.
+    manager.setSchematic(makeSchematic([{ size: [64, 16, 64], palette: ['minecraft:air'] }]))
+    const deletes = () => view.log.filter((l) => l.startsWith('delete ')).length
+    const slow = vi.spyOn(view, 'delete').mockImplementation(function (this: FakeView, key: string) {
+      t += 4
+      FakeView.prototype.delete.call(this, key)
+    })
+    manager.pump(origin)
+    expect(deletes()).toBe(2) // 4 ms, 8 ms: over the 6 ms budget after the second
+    t = 1000
+    slow.mockRestore()
+    manager.pump(origin)
+    expect(deletes()).toBe(16) // a clock that stands still never runs out
+    expect(manager.stats.queued).toBe(0)
+    const tight = setup()
+    const none = new ChunkManager(tight.view, tight.mesher, { now: () => (t += 1), budgetMs: 0 })
+    none.setSchematic(makeSchematic([{ size: [64, 16, 64], palette: ['minecraft:air'] }]))
+    none.pump(origin)
+    expect(tight.view.log.filter((l) => l.startsWith('delete '))).toHaveLength(1)
+  })
+
   it('passes the render mode and switches it by remeshing everything', async () => {
     const { view, mesher, manager } = setup(4)
     manager.setSchematic(stoneSchematic())
@@ -115,6 +141,16 @@ describe('ChunkManager', () => {
     manager.pump(origin)
     expect(mesher.calls).toHaveLength(4)
     expect(mesher.calls.every((c) => c.job.mode === 'textured')).toBe(true)
+  })
+
+  it('remeshes everything in the same mode on remeshAll (new colors from textured assets)', async () => {
+    const { view, mesher, manager } = setup(4)
+    manager.setSchematic(stoneSchematic())
+    await drain(manager, mesher, view)
+    manager.remeshAll()
+    manager.pump(origin)
+    expect(mesher.calls).toHaveLength(4)
+    expect(mesher.calls.every((c) => c.job.mode === 'colored')).toBe(true)
   })
 
   it('remeshes only the chunks an edit touched', async () => {
@@ -131,7 +167,8 @@ describe('ChunkManager', () => {
     manager.setSchematic(s)
     await drain(manager, mesher, view)
     manager.applyChanges([{ regionId: 0, paletteChange: { slots: [2] } }])
-    expect(await drain(manager, mesher, view)).toEqual(['0/1,0,0/main'])
+    // Chunk 1 holds the slot; its face neighbour chunk 0 is remeshed too.
+    expect((await drain(manager, mesher, view)).sort()).toEqual(['0/0,0,0/main', '0/1,0,0/main'])
   })
 
   it('ignores results that an edit made stale', async () => {
@@ -264,8 +301,9 @@ describe('ChunkManager', () => {
     manager.setRegionVisible(0, false)
     manager.pump(origin)
     expect(mesher.calls).toHaveLength(0)
-    expect(manager.stats.queued).toBe(4)
+    expect(manager.stats).toMatchObject({ queued: 0, parked: 4 })
     manager.setRegionVisible(0, true)
+    expect(manager.stats).toMatchObject({ queued: 4, parked: 0 })
     expect(await drain(manager, mesher, view)).toHaveLength(4)
   })
 
@@ -286,6 +324,6 @@ describe('ChunkManager', () => {
     manager.setSchematic(stoneSchematic())
     manager.setSchematic(null)
     expect(view.log.at(-1)).toBe('clear')
-    expect(manager.stats).toEqual({ total: 0, queued: 0, meshing: 0, failed: 0 })
+    expect(manager.stats).toEqual({ total: 0, queued: 0, parked: 0, meshing: 0, failed: 0 })
   })
 })
