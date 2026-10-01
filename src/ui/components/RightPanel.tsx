@@ -2,9 +2,11 @@ import type { ComponentType } from 'react'
 import type { RightTab } from '../app/state'
 import { useApp, useController } from '../hooks'
 import { MaterialsTab } from './MaterialsTab'
+import { ReplaceTab } from './ReplaceTab'
 
 const TABS: { id: RightTab; label: string; Panel: ComponentType<{ active: boolean }> }[] = [
   { id: 'materials', label: 'Materials', Panel: MaterialsTab },
+  { id: 'replace', label: 'Replace', Panel: ReplaceTab },
 ]
 
 /** Spec §11 right panel. Every tab stays mounted, so forms keep their input across tab switches. */
