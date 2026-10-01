@@ -10,6 +10,7 @@ export function TopBar() {
   const controller = useController()
   const doc = useApp((s) => s.doc)
   const busy = useApp((s) => s.busy)
+  useApp((s) => s.metaRevision) // re-render with the new name/author; renames leave `doc` unchanged
   const input = useRef<HTMLInputElement>(null)
   const history = doc?.editor.history
   return (

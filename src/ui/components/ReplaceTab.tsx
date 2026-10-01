@@ -42,12 +42,21 @@ export function ReplaceTab({ active }: { active: boolean }) {
 
   const fromNames = useMemo(() => pickerNames(registry.names(), schematic), [registry, schematic])
   const built = useMemo(() => buildReplace(form, registry, selection), [form, registry, selection])
-  const previews = useMemo(() => {
-    if (!active || !doc || !built.ok) return null
-    const replace = built.replaceRule ? doc.editor.previewReplace([built.replaceRule], built.scopes) : null
-    const del = doc.editor.previewReplace([built.deleteRule], built.scopes)
-    return { replace, delete: del }
-  }, [active, doc, built])
+  // Delete needs only "from" and the scope, so it is built (and its full scan
+  // run) separately: changing the target neither rescans it nor disables it.
+  const { from, scope } = form
+  const deleteBuilt = useMemo(
+    () => buildReplace({ ...emptyReplaceForm, from, scope }, registry, selection),
+    [from, scope, registry, selection],
+  )
+  const deletePreview = useMemo(
+    () => (active && doc && deleteBuilt.ok ? doc.editor.previewReplace([deleteBuilt.deleteRule], deleteBuilt.scopes) : null),
+    [active, doc, deleteBuilt],
+  )
+  const replacePreview = useMemo(
+    () => (active && doc && built.ok && built.replaceRule ? doc.editor.previewReplace([built.replaceRule], built.scopes) : null),
+    [active, doc, built],
+  )
 
   if (!doc) return <p className="hint">Open a schematic to replace blocks.</p>
 
@@ -132,23 +141,23 @@ export function ReplaceTab({ active }: { active: boolean }) {
           selection={selection}
           layerRange={layerRange}
         />
-        {!built.ok && built.field === 'scope' && <p className="field-error">{built.error}</p>}
+        {!deleteBuilt.ok && deleteBuilt.field === 'scope' && <p className="field-error">{deleteBuilt.error}</p>}
       </section>
       <section>
-        {previews && <PreviewText replace={previews.replace} remove={previews.delete} capBytes={capBytes} />}
+        {deletePreview && <PreviewText replace={replacePreview} remove={deletePreview} capBytes={capBytes} />}
         <div className="row">
           <button
             type="button"
             className="primary"
-            disabled={!built.ok || !built.replaceRule || !previews?.replace || previews.replace.count === 0}
+            disabled={!built.ok || !built.replaceRule || !replacePreview || replacePreview.count === 0}
             onClick={() => built.ok && built.replaceRule && controller.replace([built.replaceRule], built.scopes)}
           >
             Replace
           </button>
           <button
             type="button"
-            disabled={!built.ok || !previews || previews.delete.count === 0}
-            onClick={() => built.ok && controller.delete(built.from, built.scopes)}
+            disabled={!deleteBuilt.ok || !deletePreview || deletePreview.count === 0}
+            onClick={() => deleteBuilt.ok && controller.delete(deleteBuilt.from, deleteBuilt.scopes)}
           >
             Delete
           </button>

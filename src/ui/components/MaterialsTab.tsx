@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type KeyboardEvent } from 'react'
 import {
   computeMaterials, filterMaterials, materialsToCsv, materialsToText, sortMaterials,
   type MaterialList, type MaterialSortKey,
@@ -54,6 +54,18 @@ export function MaterialsTab({ active }: { active: boolean }) {
     setSort((s) => (s.key === key ? { key, direction: s.direction === 'asc' ? 'desc' : 'asc' } : { key, direction: numeric ? 'desc' : 'asc' }))
   const toggleHighlight = (key: string, blocks: readonly string[]) =>
     controller.setHighlight(highlight?.key === key ? null : { key, blocks })
+  /** A row that toggles its highlight on click, Enter or Space. */
+  const rowProps = (key: string, blocks: readonly string[]) => ({
+    role: 'button',
+    tabIndex: 0,
+    'aria-pressed': highlight?.key === key,
+    onClick: () => toggleHighlight(key, blocks),
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return
+      e.preventDefault()
+      toggleHighlight(key, blocks)
+    },
+  })
 
   return (
     <div className="materials-tab">
@@ -104,7 +116,7 @@ export function MaterialsTab({ active }: { active: boolean }) {
           </thead>
           <tbody>
             {shown.rows.map((r) => (
-              <tr key={r.item} aria-selected={highlight?.key === r.item} onClick={() => toggleHighlight(r.item, r.blocks)} title="Highlight in the 3D view">
+              <tr key={r.item} {...rowProps(r.item, r.blocks)} title="Highlight in the 3D view">
                 <td>{short(r.item)}{r.unknown && <span className="badge">unknown</span>}</td>
                 <td className="num">{r.count.toLocaleString('en-US')}</td>
                 <td className="num">{r.stacks.toLocaleString('en-US')}</td>
@@ -120,7 +132,7 @@ export function MaterialsTab({ active }: { active: boolean }) {
           <table className="materials">
             <tbody>
               {shown.itemless.map((r) => (
-                <tr key={r.block} aria-selected={highlight?.key === `itemless:${r.block}`} onClick={() => toggleHighlight(`itemless:${r.block}`, [r.block])}>
+                <tr key={r.block} {...rowProps(`itemless:${r.block}`, [r.block])} title="Highlight in the 3D view">
                   <td>{short(r.block)}</td>
                   <td className="num">{r.count.toLocaleString('en-US')}</td>
                 </tr>

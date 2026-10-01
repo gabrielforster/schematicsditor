@@ -6,7 +6,7 @@ import { useApp, useController } from '../hooks'
 export function Viewport() {
   const controller = useController()
   const host = useRef<HTMLDivElement>(null)
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
+  const [pointer, setPointer] = useState<Pointer | null>(null)
   const hover = useApp((s) => s.hover)
 
   useEffect(() => {
@@ -26,14 +26,15 @@ export function Viewport() {
         data-testid="viewport"
         onPointerMove={(e) => {
           const rect = e.currentTarget.getBoundingClientRect()
-          setPointer({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+          const { clientWidth: width, clientHeight: height } = e.currentTarget
+          setPointer({ x: e.clientX - rect.left, y: e.clientY - rect.top, width, height })
         }}
         onPointerLeave={() => setPointer(null)}
       />
       <StatsOverlay />
       <ViewButtons />
       <StatusLine />
-      {hover && pointer && <HoverTooltip hit={hover} x={pointer.x} y={pointer.y} />}
+      {hover && pointer && <HoverTooltip hit={hover} pointer={pointer} />}
     </>
   )
 }
@@ -54,13 +55,34 @@ function StatsOverlay() {
   return <div className="stats" data-testid="stats">{parts.join(' · ')}</div>
 }
 
-function HoverTooltip({ hit, x, y }: { hit: PickHit; x: number; y: number }) {
+/** Pointer position and the viewport host's size, in host pixels. */
+interface Pointer { x: number; y: number; width: number; height: number }
+
+const TOOLTIP_OFFSET = 14
+/** Estimated tooltip box: 12px monospace (~7.2px per character) plus padding, two lines. */
+const tooltipSize = (text: string) => ({ width: text.length * 7.2 + 16, height: 40 })
+
+/**
+ * Below-right of the pointer, flipped left/up when it would overflow the
+ * host's right/bottom edge (a size of 0 means unknown: no flip).
+ */
+function tooltipPosition(p: Pointer, size: { width: number; height: number }): { left: number; top: number } {
+  const flipX = p.width > 0 && p.x + TOOLTIP_OFFSET + size.width > p.width
+  const flipY = p.height > 0 && p.y + TOOLTIP_OFFSET + size.height > p.height
+  return {
+    left: flipX ? Math.max(0, p.x - TOOLTIP_OFFSET - size.width) : p.x + TOOLTIP_OFFSET,
+    top: flipY ? Math.max(0, p.y - TOOLTIP_OFFSET - size.height) : p.y + TOOLTIP_OFFSET,
+  }
+}
+
+function HoverTooltip({ hit, pointer }: { hit: PickHit; pointer: Pointer }) {
   const { services } = useController()
   const name = hit.state.split('[')[0]!
   const unknown = !services.registry.has(name)
+  const label = `${hit.state}${unknown ? ' (unknown block)' : ''}`
   return (
-    <div className="tooltip" role="tooltip" style={{ left: x + 14, top: y + 14 }}>
-      <div>{hit.state}{unknown && ' (unknown block)'}</div>
+    <div className="tooltip" role="tooltip" style={tooltipPosition(pointer, tooltipSize(label))}>
+      <div>{label}</div>
       <div>{hit.world.x} {hit.world.y} {hit.world.z} · {hit.regionName}</div>
     </div>
   )

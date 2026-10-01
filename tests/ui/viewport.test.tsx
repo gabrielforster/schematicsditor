@@ -53,6 +53,23 @@ describe('Viewport', () => {
     expect(screen.queryByRole('tooltip')).toBeNull()
   })
 
+  it('flips the tooltip left of and above the pointer near the right and bottom edges', async () => {
+    const { renderer } = await openedApp()
+    const host = screen.getByTestId('viewport')
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 400 })
+    Object.defineProperty(host, 'clientHeight', { configurable: true, value: 300 })
+    fireEvent.pointerMove(host, { clientX: 100, clientY: 50 })
+    act(() => renderer.emit('hover', hit('minecraft:stone')))
+    const tip = screen.getByRole('tooltip')
+    expect([tip.style.left, tip.style.top]).toEqual(['114px', '64px'])
+    fireEvent.pointerMove(host, { clientX: 395, clientY: 295 })
+    const left = parseFloat(tip.style.left), top = parseFloat(tip.style.top)
+    expect(left).toBeLessThan(395)
+    expect(left).toBeGreaterThanOrEqual(0)
+    expect(top).toBeLessThan(295)
+    expect(top).toBeGreaterThanOrEqual(0)
+  })
+
   it('marks unknown blocks in the tooltip', async () => {
     const { renderer } = await openedApp()
     fireEvent.pointerMove(screen.getByTestId('viewport'), { clientX: 1, clientY: 1 })
