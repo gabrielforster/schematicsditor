@@ -3,6 +3,7 @@ import { ConfirmDialog, ErrorDialog } from './components/Dialogs'
 import { EmptyState, type SampleSlot } from './components/EmptyState'
 import { LeftPanel } from './components/LeftPanel'
 import { Notices } from './components/Notices'
+import { RightPanel } from './components/RightPanel'
 import { TopBar } from './components/TopBar'
 import { Viewport } from './components/Viewport'
 import { ControllerContext, useApp, useController } from './hooks'
@@ -38,6 +39,7 @@ function Shell({ sample }: { sample?: SampleSlot | undefined }) {
           <Viewport />
           {!doc && <EmptyState sample={sample} />}
         </section>
+        <RightPanel />
       </main>
       {drop.dragging && <div className="drop-overlay" aria-hidden="true">Drop to open</div>}
       <ErrorDialog />
