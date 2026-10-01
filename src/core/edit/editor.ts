@@ -5,6 +5,8 @@ import { DEFAULT_HISTORY_CAP_BYTES, History, makeEntry } from './history'
 import type { Matcher } from './matchers'
 import { applyReplace, deleteRule, previewReplace, type ReplacePreview, type ReplaceResult, type ReplaceRule } from './replace'
 import type { Scope } from './scopes'
+import type { Family } from '../families/families'
+import { familySwapRules, previewFamilySwap, type FamilySwapPreview } from '../families/swap'
 
 export type ChangeListener = (changes: RegionChange[]) => void
 
@@ -58,6 +60,15 @@ export class Editor {
 
   delete(from: readonly Matcher[], scopes: readonly Scope[], label = 'Delete'): EditResult {
     return this.replace([deleteRule(from)], scopes, label)
+  }
+
+  previewFamilySwap(source: Family, target: Family, scopes: readonly Scope[]): FamilySwapPreview {
+    return previewFamilySwap(this.schematic, source, target, scopes, this.registry)
+  }
+
+  /** Every shared shape is swapped in one pass and recorded as one history entry. */
+  familySwap(source: Family, target: Family, scopes: readonly Scope[]): EditResult {
+    return this.replace(familySwapRules(source, target), scopes, `${source.label} → ${target.label}`)
   }
 
   undo(): boolean {
