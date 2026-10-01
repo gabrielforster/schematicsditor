@@ -68,6 +68,43 @@ describe('undoEdit / redoEdit', () => {
     s.regions[0]!.palette.push({ name: 'minecraft:dirt', properties: {} })
     expect(() => undoEdit(s, edits[0]!)).toThrow(/out of sync/)
   })
+
+  function chestOnlyRow(): Schematic {
+    const s = makeSchematic([{
+      size: [1, 1, 1],
+      palette: ['minecraft:chest[facing=north,type=single,waterlogged=false]'],
+      blocks: [0],
+    }])
+    s.regions[0]!.tileEntities.set(0, new NbtCompound().set('id', new NbtString('minecraft:chest')))
+    return s
+  }
+
+  it('undo restores the original block entity id, redo re-applies the rewritten one (whole region)', () => {
+    const s = chestOnlyRow()
+    const { edits, changes } = applyReplace(s, [rule('chest', 'minecraft:trapped_chest')], [], registry)
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:trapped_chest')
+    expect(undoEdit(s, edits[0]!)).toEqual(changes[0])
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:chest')
+    expect(redoEdit(s, edits[0]!)).toEqual(changes[0])
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:trapped_chest')
+  })
+
+  it('undo restores the original block entity id, redo re-applies the rewritten one (scoped blocks path)', () => {
+    const s = makeSchematic([{
+      size: [2, 1, 1],
+      palette: ['minecraft:chest[facing=north,type=single,waterlogged=false]', 'minecraft:stone'],
+      blocks: [0, 1],
+    }])
+    s.regions[0]!.tileEntities.set(0, new NbtCompound().set('id', new NbtString('minecraft:chest')))
+    const scope: Scope[] = [{ kind: 'box', box: { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } } }]
+    const { edits, changes } = applyReplace(s, [rule('chest', 'minecraft:trapped_chest')], scope, registry)
+    expect(edits[0]!.kind).toBe('blocks')
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:trapped_chest')
+    expect(undoEdit(s, edits[0]!)).toEqual(changes[0])
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:chest')
+    expect(redoEdit(s, edits[0]!)).toEqual(changes[0])
+    expect(s.regions[0]!.tileEntities.get(0)!.getString('id')).toBe('minecraft:trapped_chest')
+  })
 })
 
 describe('History', () => {
@@ -134,5 +171,34 @@ describe('History', () => {
 
   it('defaults to a 256 MB cap', () => {
     expect(new History().capBytes).toBe(256 * 1024 * 1024)
+  })
+
+  it('clears the whole history when undo throws partway through a compound entry', () => {
+    const s = makeSchematic([
+      { size: [1, 1, 1], palette: ['minecraft:stone'] },
+      { size: [1, 1, 1], palette: ['minecraft:stone'] },
+    ])
+    const h = new History()
+    h.push(edit(s, 'stone', 'minecraft:andesite'))
+    s.regions.pop()
+    expect(() => h.undo(s)).toThrow(/out of sync/)
+    expect(h.canUndo).toBe(false)
+    expect(h.canRedo).toBe(false)
+    expect(h.bytes).toBe(0)
+  })
+
+  it('clears the whole history when redo throws partway through a compound entry', () => {
+    const s = makeSchematic([
+      { size: [1, 1, 1], palette: ['minecraft:stone'] },
+      { size: [1, 1, 1], palette: ['minecraft:stone'] },
+    ])
+    const h = new History()
+    h.push(edit(s, 'stone', 'minecraft:andesite'))
+    h.undo(s)
+    s.regions.pop()
+    expect(() => h.redo(s)).toThrow(/out of sync/)
+    expect(h.canUndo).toBe(false)
+    expect(h.canRedo).toBe(false)
+    expect(h.bytes).toBe(0)
   })
 })

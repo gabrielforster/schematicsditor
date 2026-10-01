@@ -67,22 +67,38 @@ export class History {
     return true
   }
 
-  /** Revert the newest entry; null when there is nothing to undo. */
+  /**
+   * Revert the newest entry; null when there is nothing to undo. If an edit
+   * throws partway through a compound entry, the model is only partly
+   * reverted and the entry is already popped, so the whole history is
+   * cleared (neither stack could be trusted to undo/redo correctly) and the
+   * error is rethrown.
+   */
   undo(schematic: Schematic): RegionChange[] | null {
     const entry = this.undoStack.pop()
     if (!entry) return null
-    const changes = [...entry.edits].reverse().map((e) => undoEdit(schematic, e))
-    this.redoStack.push(entry)
-    return changes
+    try {
+      const changes = [...entry.edits].reverse().map((e) => undoEdit(schematic, e))
+      this.redoStack.push(entry)
+      return changes
+    } catch (e) {
+      this.clear()
+      throw e
+    }
   }
 
-  /** Re-apply the most recently undone entry; null when there is nothing to redo. */
+  /** Re-apply the most recently undone entry; null when there is nothing to redo. Same failure handling as {@link undo}. */
   redo(schematic: Schematic): RegionChange[] | null {
     const entry = this.redoStack.pop()
     if (!entry) return null
-    const changes = entry.edits.map((e) => redoEdit(schematic, e))
-    this.undoStack.push(entry)
-    return changes
+    try {
+      const changes = entry.edits.map((e) => redoEdit(schematic, e))
+      this.undoStack.push(entry)
+      return changes
+    } catch (e) {
+      this.clear()
+      throw e
+    }
   }
 
   clear(): void {
