@@ -82,7 +82,7 @@ function diffRegion(out: string[], a: Region, b: Region): void {
   if (a.name !== b.name) out.push(`${p}: name ≠ "${b.name}"`)
   sameVec(out, `${p} position`, a.position, b.position)
   sameVec(out, `${p} size`, a.size, b.size)
-  if (!sameFileBox(a.fileBox, b.fileBox)) out.push(`${p}: fileBox differs`)
+  if (!sameFileBox(writtenBox(a), writtenBox(b))) out.push(`${p}: fileBox differs`)
   if (a.blocks.length !== b.blocks.length) {
     out.push(`${p}: block count ${a.blocks.length} ≠ ${b.blocks.length}`)
   } else {
@@ -117,8 +117,12 @@ function sameVecValue(a: Vec3, b: Vec3): boolean {
   return a.x === b.x && a.y === b.y && a.z === b.z
 }
 
-function sameFileBox(a: Region['fileBox'], b: Region['fileBox']): boolean {
-  if (!a || !b) return a === b
+/** A region without a file box is written normalized, so that is the box it reads back with. */
+function writtenBox(r: Region): { position: Vec3; size: Vec3 } {
+  return r.fileBox ?? { position: r.position, size: r.size }
+}
+
+function sameFileBox(a: { position: Vec3; size: Vec3 }, b: { position: Vec3; size: Vec3 }): boolean {
   return sameVecValue(a.position, b.position) && sameVecValue(a.size, b.size)
 }
 

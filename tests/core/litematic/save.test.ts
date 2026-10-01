@@ -57,6 +57,13 @@ describe('diffSchematics', () => {
     expect(diffSchematics(a, b)).toEqual(['region "region0": fileBox differs'])
   })
 
+  it('treats a missing fileBox as the normalized box it will be written as', () => {
+    const a = read(sample())
+    const b = read(sample())
+    delete a.regions[0]!.fileBox
+    expect(diffSchematics(a, b)).toEqual([])
+  })
+
   it('reports a region extra tag mismatch', () => {
     const a = read(sample())
     const b = read(sample())
@@ -80,6 +87,13 @@ describe('saveLitematic', () => {
     expect(diffSchematics(saved, readLitematic(bytes))).toEqual([])
     expect(saved.metadata.timeModified).toBe(NOW)
     expect(saved.metadata.totalBlocks).toBe(6)
+  })
+
+  it('saves a region built in memory without a fileBox', () => {
+    const s = read({ regions: [{ position: [3, 4, 5], size: [-2, 1, 1], palette: ['minecraft:air', 'minecraft:stone'], blocks: [1, 0] }] })
+    delete s.regions[0]!.fileBox
+    const back = readLitematic(saveLitematic(s, NOW).bytes)
+    expect(back.regions[0]!.fileBox).toEqual({ position: { x: 2, y: 4, z: 5 }, size: { x: 2, y: 1, z: 1 } })
   })
 
   it('throws RoundTripError when the encoded bytes do not match', () => {

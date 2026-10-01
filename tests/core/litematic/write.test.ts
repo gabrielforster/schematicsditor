@@ -69,6 +69,17 @@ describe('recomputeMetadata', () => {
   })
 })
 
+describe('recomputeMetadata with no regions', () => {
+  it('reports an empty enclosing box instead of Infinity or NaN', () => {
+    const s = read({ regions: [{ size: [1, 1, 1], palette: ['minecraft:stone'] }] })
+    const m = recomputeMetadata({ ...s, regions: [] }, NOW)
+    expect(m.enclosingSize).toEqual({ x: 0, y: 0, z: 0 })
+    expect(m.totalVolume).toBe(0)
+    expect(m.totalBlocks).toBe(0)
+    expect(m.regionCount).toBe(0)
+  })
+})
+
 describe('encodeLitematic', () => {
   function roundTrip(s: Schematic): Schematic {
     return readLitematic(encodeLitematic(prepareForWrite(s, NOW)))

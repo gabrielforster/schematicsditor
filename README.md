@@ -19,6 +19,17 @@ must survive read → save → read unchanged (`tests/core/litematic/fixtures.te
 coverage: single region, multiple regions, a region placed with negative size, chests/signs
 (tile entities), mobs/item frames (entities), and files from several Minecraft versions.
 
+## Block data
+
+`src/core/registry/blocks.json` (block list, properties, defaults) and `items.json` (item ids)
+are snapshots of [misode/mcmeta](https://github.com/misode/mcmeta)'s summary data. To update
+them for a new Minecraft release:
+
+```bash
+npm run generate:registry -- <version>   # e.g. 26.3; omit for the newest stable release
+npm test                                  # family and item-mapping tests flag renamed or new blocks
+```
+
 ## Manual in-game check
 
 After changing anything under `src/core/litematic/`:

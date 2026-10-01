@@ -38,6 +38,40 @@ describe('parseBlockStateKey', () => {
   })
 })
 
+describe('parseBlockStateKey (strict input)', () => {
+  it.each([
+    ['a closing bracket without an opening one', 'minecraft:stone]'],
+    ['an empty name', '[facing=north]'],
+    ['an empty string', ''],
+    ['a second opening bracket', 'minecraft:oak_stairs[facing=[north]'],
+    ['text after the closing bracket', 'minecraft:oak_stairs[facing=north]x'],
+    ['an empty value', 'minecraft:oak_stairs[facing=]'],
+    ['an empty key', 'minecraft:oak_stairs[=north]'],
+    ['a duplicate key', 'minecraft:oak_stairs[facing=north,facing=south]'],
+    ['a trailing comma', 'minecraft:oak_stairs[facing=north,]'],
+    ['whitespace', 'minecraft:oak_stairs[facing= north]'],
+    ['uppercase letters', 'minecraft:Stone'],
+    ['two colons', 'minecraft:stone:extra'],
+  ])('rejects %s', (_label, input) => {
+    expect(() => parseBlockStateKey(input)).toThrow(SyntaxError)
+  })
+
+  it('accepts a bare name without a namespace', () => {
+    expect(parseBlockStateKey('stone')).toEqual({ name: 'stone', properties: {} })
+  })
+
+  it('accepts empty brackets as no properties', () => {
+    expect(parseBlockStateKey('minecraft:stone[]')).toEqual({ name: 'minecraft:stone', properties: {} })
+  })
+
+  it('accepts modded namespaces and paths with slashes and dots', () => {
+    expect(parseBlockStateKey('my-mod.x:deco/lamp_1[lit=true]')).toEqual({
+      name: 'my-mod.x:deco/lamp_1',
+      properties: { lit: 'true' },
+    })
+  })
+})
+
 describe('isAir', () => {
   it.each(['minecraft:air', 'minecraft:cave_air', 'minecraft:void_air'])('treats %s as air', (name) => {
     expect(isAir({ name, properties: {} })).toBe(true)
