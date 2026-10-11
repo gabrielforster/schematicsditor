@@ -108,3 +108,39 @@ describe('Editor', () => {
     expect(keys()).toEqual(['minecraft:stone', 'minecraft:dirt'])
   })
 })
+
+describe('Editor.setMetadata', () => {
+  it('changes name, author and description in place and reports a change', () => {
+    const { editor, schematic } = setup()
+    const metadata = schematic.metadata
+    expect(editor.setMetadata({ name: 'Castle', author: 'Steve' })).toBe(true)
+    expect(schematic.metadata).toBe(metadata)
+    expect(metadata).toMatchObject({ name: 'Castle', author: 'Steve', description: '' })
+  })
+
+  it('reports false when every value is unchanged', () => {
+    const { editor } = setup()
+    expect(editor.setMetadata({ name: 'test' })).toBe(false)
+    expect(editor.setMetadata({})).toBe(false)
+  })
+
+  it('is not undoable and does not notify change listeners', () => {
+    const { editor, events } = setup()
+    editor.setMetadata({ name: 'Castle' })
+    expect(editor.canUndo).toBe(false)
+    expect(events).toEqual([])
+  })
+
+  it('rejects a value too long for an NBT string and changes nothing', () => {
+    const { editor, schematic } = setup()
+    // 'é' is two bytes of UTF-8: 32,768 of them exceed 65,535 bytes.
+    expect(() => editor.setMetadata({ name: 'ok', author: 'é'.repeat(32768) })).toThrow(RangeError)
+    expect(schematic.metadata).toMatchObject({ name: 'test', author: 'tester' })
+  })
+
+  it('writes the new values on save', () => {
+    const { editor, schematic } = setup()
+    editor.setMetadata({ name: 'Castle', author: 'Steve', description: 'A keep' })
+    expect(readLitematic(saveLitematic(schematic).bytes).metadata).toMatchObject({ name: 'Castle', author: 'Steve', description: 'A keep' })
+  })
+})

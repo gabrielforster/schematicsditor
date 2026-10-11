@@ -1,7 +1,7 @@
 import { NbtCompound, NbtInt, NbtIntArray, NbtList, NbtLong, NbtString } from 'deepslate/nbt'
 import type { BlockState, Metadata, Region, Schematic, Vec3 } from '../model'
 import { AIR, blockStateKey, createBlockArray, isAir, volumeOf } from '../model'
-import { wordsToLongArray, writeNbt } from '../nbt'
+import { wordsToLongArray, writeNbt, writeNbtAsync } from '../nbt'
 import { bitsForPalette, packBits } from './bits'
 import { normalizeBox } from './read'
 
@@ -69,6 +69,16 @@ export function prepareForWrite(schematic: Schematic, now: number): Schematic {
 
 /** Encode a model as-is. Call prepareForWrite first; saveLitematic does both. */
 export function encodeLitematic(schematic: Schematic): Uint8Array {
+  return writeNbt(litematicRoot(schematic))
+}
+
+/** `encodeLitematic` with native gzip where available (see writeNbtAsync). */
+export function encodeLitematicAsync(schematic: Schematic): Promise<Uint8Array> {
+  return writeNbtAsync(litematicRoot(schematic))
+}
+
+/** The NBT tree `encodeLitematic` writes. */
+export function litematicRoot(schematic: Schematic): NbtCompound {
   const root = new NbtCompound().set('Version', new NbtInt(schematic.version))
   if (schematic.subVersion !== undefined) root.set('SubVersion', new NbtInt(schematic.subVersion))
   root
@@ -78,7 +88,7 @@ export function encodeLitematic(schematic: Schematic): Uint8Array {
   for (const region of schematic.regions) regions.set(region.name, encodeRegion(region))
   root.set('Regions', regions)
   schematic.extra.forEach((k, v) => root.set(k, v))
-  return writeNbt(root)
+  return root
 }
 
 function encodeMetadata(m: Metadata): NbtCompound {

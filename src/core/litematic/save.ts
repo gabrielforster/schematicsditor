@@ -1,8 +1,8 @@
 import type { NbtCompound } from 'deepslate/nbt'
 import type { Region, Schematic, Vec3 } from '../model'
 import { blockStateKey } from '../model'
-import { readLitematic } from './read'
-import { encodeLitematic, prepareForWrite } from './write'
+import { readLitematic, readLitematicAsync } from './read'
+import { encodeLitematic, encodeLitematicAsync, prepareForWrite } from './write'
 
 export class RoundTripError extends Error {
   readonly differences: string[]
@@ -32,13 +32,39 @@ export function saveLitematic(
   } catch (e) {
     throw new RoundTripError([`re-read failed: ${e instanceof Error ? e.message : String(e)}`])
   }
+  checkRoundTrip(schematic, saved, reread)
+  return { bytes, saved }
+}
+
+/**
+ * `saveLitematic` for the save worker: the same guard, with native gzip
+ * and gunzip where available (CompressionStream), which is much faster on
+ * large files.
+ */
+export async function saveLitematicAsync(
+  schematic: Schematic,
+  now: number = Date.now(),
+  encode: (s: Schematic) => Promise<Uint8Array> = encodeLitematicAsync,
+): Promise<{ bytes: Uint8Array; saved: Schematic }> {
+  const saved = prepareForWrite(schematic, now)
+  const bytes = await encode(saved)
+  let reread: Schematic
+  try {
+    reread = await readLitematicAsync(bytes)
+  } catch (e) {
+    throw new RoundTripError([`re-read failed: ${e instanceof Error ? e.message : String(e)}`])
+  }
+  checkRoundTrip(schematic, saved, reread)
+  return { bytes, saved }
+}
+
+function checkRoundTrip(original: Schematic, saved: Schematic, reread: Schematic): void {
   // Metadata is recomputed by prepare, so it is compared against the saved
   // model; regions are compared against the ORIGINAL schematic, so a bug in
   // prepare (e.g. compactRegion corrupting blocks) can't pass just because
   // the encoder and reader agree with each other.
-  const differences = [...diffMetadata(saved, reread), ...diffRegions(schematic.regions, reread.regions)]
+  const differences = [...diffMetadata(saved, reread), ...diffRegions(original.regions, reread.regions)]
   if (differences.length > 0) throw new RoundTripError(differences)
-  return { bytes, saved }
 }
 
 /** Human-readable differences between two models; empty when equivalent. */
